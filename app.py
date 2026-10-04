@@ -7,7 +7,7 @@ def run_automation(email, password, seans, selected_days):
     print(f"\n[İŞLEM BAŞLADI] Kullanıcı: {email} | Seans: {seans} | Günler: {selected_days}")
     with sync_playwright() as p:
         # headless=False لعرض ما يحدث أثناء التجربة
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
         context = browser.new_context()
         page = context.new_page()
 
