@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Islem Sonucu</title>
+  <style>
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #f4f6f9; margin: 0; padding: 15px; display: flex; justify-content: center; }
+    .card { background: white; padding: 20px; border-radius: 12px; width: 100%; max-width: 600px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; }
+    .warning { color: #b45309; }
+    .success { color: #15803d; }
+    .error { color: #b91c1c; }
+    .log-box { background: #111827; color: #10b981; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; max-height: 200px; overflow-y: auto; margin-bottom: 20px; }
+    .log-box p { margin: 4px 0; }
+    img { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; }
+    a.btn { display: block; text-align: center; padding: 12px; background: #2563eb; color: white; text-decoration: none; border-radius: 8px; font-weight: bold; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2 class="{{ status }}">Islem Durumu Raporu</h2>
+    
+    <div class="log-box">
+      {% for log in logs %}
+        <p>{{ log }}</p>
+      {% endfor %}
+    </div>
+
+    {% if screenshot %}
+      <h3>Sistem Ekrani Goruntusu:</h3>
+      <img src="data:image/png;base64,{{ screenshot }}" alt="Sistem Ekrani">
+    {% endif %}
+
+    <a href="/" class="btn">Geri Don</a>
+  </div>
+</body>
+</html>
