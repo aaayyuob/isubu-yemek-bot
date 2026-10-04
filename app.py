@@ -4,42 +4,55 @@ from playwright.sync_api import sync_playwright
 app = Flask(__name__)
 
 def run_automation(email, password, seans, selected_days):
-    print(f"\n[İŞLEM BAŞLADI] Kullanıcı: {email} | Seans: {seans} | Günler: {selected_days}")
+    print(f"\n[TASK STARTED] User: {email} | Session: {seans} | Days: {selected_days}")
+    
     with sync_playwright() as p:
-        # headless=False لعرض ما يحدث أثناء التجربة
-        browser = p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        # Launch headless Chromium with full cloud-compatible flags
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--no-first-run",
+                "--no-zygote",
+                "--single-process"
+            ]
+        )
         context = browser.new_context()
         page = context.new_page()
 
-        print("1. Giris sayfasi aciliyor...")
-        # استخدام domcontentloaded و timeout 60 ثانية لمنع الـ TimeoutError
-        page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=60000)
-        
-        print("2. Giris butonu tiklaniyor...")
-        page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
-        
-        print("3. Kimlik bilgileri yaziliyor...")
-        page.get_by_placeholder("E-posta").wait_for(timeout=30000)
-        page.get_by_placeholder("E-posta").fill(email)
-        page.get_by_placeholder("Parola").fill(password)
-        page.get_by_role("button", name="Giriş").click()
-        page.wait_for_load_state("domcontentloaded")
+        try:
+            print("1. Loading home page...")
+            page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=60000)
+            
+            print("2. Clicking login link...")
+            page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
+            
+            print("3. Submitting credentials...")
+            page.get_by_placeholder("E-posta").wait_for(timeout=30000)
+            page.get_by_placeholder("E-posta").fill(email)
+            page.get_by_placeholder("Parola").fill(password)
+            page.get_by_role("button", name="Giriş").click()
+            page.wait_for_load_state("domcontentloaded")
 
-        print("4. Seans secim sayfasina gidiliyor...")
-        page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=60000)
+            print("4. Navigating to session selection...")
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=60000)
 
-        print(f"5. Seans seciliyor: {seans}...")
-        if seans == "Ogle":
-            page.get_by_role("link", name="Satın Al").first.click()
-        else:
-            page.get_by_role("link", name="Satın Al").nth(1).click()
+            print(f"5. Selecting meal session: {seans}...")
+            if seans == "Ogle":
+                page.get_by_role("link", name="Satın Al").first.click()
+            else:
+                page.get_by_role("link", name="Satın Al").nth(1).click()
 
-        page.wait_for_load_state("domcontentloaded")
+            page.wait_for_load_state("domcontentloaded")
 
-        print("6. Islem tamamlandi, SMS veya sonraki adim bekleniyor...")
-        # ابقاء المتصفح مفتوحاً للمعاينة
-        page.wait_for_timeout(60000)
-        browser.close()
+            print("6. Reservation process completed successfully.")
+
+        finally:
+            context.close()
+            browser.close()
 
 @app.route("/")
 def index():
@@ -54,10 +67,9 @@ def book():
     
     try:
         run_automation(email, password, seans, selected_days)
-        return f"<h3>İşlem başarıyla tetiklendi! Seçilen günler: {', '.join(selected_days)}</h3>"
+        return f"<h3>Rezervasyon islemi basariyla tetiklendi! Secilen gunler: {', '.join(selected_days)}</h3>"
     except Exception as e:
-        return f"<h3>Bir hata oluştu:</h3><pre>{str(e)}</pre>"
+        return f"<h3>Bir hata olustu:</h3><pre>{str(e)}</pre>"
 
 if __name__ == "__main__":
-    # host='0.0.0.0' يسمح للهواتف والجهزة الأخرى في نفس الشبكة بفتح الموقع
     app.run(host="0.0.0.0", port=5000, debug=True)
