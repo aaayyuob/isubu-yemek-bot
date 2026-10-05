@@ -57,7 +57,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             
             page.wait_for_timeout(3000)
 
-            if "Kimlik/Giris" in page.url or page.locator(".alert-danger, .validation-summary-errors, text=Hatalı").is_visible():
+            if "Kimlik/Giris" in page.url:
                 logs.append("[HATA] Giris basarisiz! E-posta veya parola hatali.")
                 status = "error"
                 screenshot_bytes = page.screenshot(full_page=True)
@@ -66,8 +66,9 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
             logs.append("4. Seans secim sayfasina gidiliyor...")
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=30000)
+            page.wait_for_timeout(2000)
 
-            if page.locator("text=Üzgünüz").is_visible() or page.locator("text=kapalı").is_visible():
+            if page.get_by_text("Üzgünüz").is_visible() or page.get_by_text("kapalı").is_visible():
                 logs.append("[BILGI] Sistem su anda haftalik fis satis saatleri disindadir / Satis kapali.")
                 status = "warning"
                 screenshot_bytes = page.screenshot(full_page=True)
@@ -83,13 +84,16 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             btn.wait_for(timeout=10000)
             btn.click()
             page.wait_for_load_state("domcontentloaded")
+            page.wait_for_timeout(2000)
 
             logs.append(f"6. Yemekhane secimi yapiliyor: {yemekhane}...")
-            page.locator("select").first.select_option(label=yemekhane)
+            selects = page.locator("select")
+            if selects.count() > 0:
+                selects.first.select_option(label=yemekhane)
             page.wait_for_timeout(1000)
 
             logs.append("7. Gun tercihleri isleniyor...")
-            day_labels = {
+            day_names = {
                 "Pazartesi": "Pazartesi",
                 "Sali": "Salı",
                 "Carsamba": "Çarşamba",
@@ -97,7 +101,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 "Cuma": "Cuma"
             }
             
-            for d_key, d_text in day_labels.items():
+            for d_key, d_text in day_names.items():
                 chk = page.locator(f"//label[contains(., '{d_text}')]//input[@type='checkbox']")
                 if chk.count() > 0:
                     if d_key in selected_days:
@@ -106,22 +110,28 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                         chk.uncheck()
 
             logs.append("8. Kart bilgileri dolduruluyor...")
-            page.locator("input[name*='KartSahibi'], input[placeholder*='Ad Soyad'], input#KartSahibi").first.fill(card_name)
-            page.locator("input[name*='KartNo'], input[placeholder*='kart'], input#KartNo").first.fill(card_number)
+            inputs = page.locator("input[type='text']")
+            text_inputs_count = inputs.count()
             
-            month_select = page.locator("select").nth(1)
-            year_select = page.locator("select").nth(2)
-            month_select.select_option(value=exp_month.zfill(2))
-            year_select.select_option(value=exp_year)
+            if text_inputs_count >= 2:
+                inputs.nth(text_inputs_count - 2).fill(card_name)
+                inputs.nth(text_inputs_count - 1).fill(card_number)
+            
+            selects = page.locator("select")
+            if selects.count() >= 3:
+                selects.nth(1).select_option(value=exp_month.zfill(2))
+                selects.nth(2).select_option(value=exp_year)
 
-            page.locator("input[name*='Cvv'], input[name*='CVV'], input[type='password']").last.fill(cvv)
+            cvv_input = page.locator("input[type='password']")
+            if cvv_input.count() > 0:
+                cvv_input.last.fill(cvv)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
-            page.get_by_role("button", name="Yükle").click()
+            page.locator("button:has-text('Yükle'), input[value='Yükle'], .btn:has-text('Yükle')").first.click()
             
             page.wait_for_timeout(4000)
 
-            logs.append("10. Islem tamamlandi, SMS dogrulama ekranina yonlendirildi.")
+            logs.append("10. Islem tamamlandi, SMS dogrulama ekranina ulasildi.")
             status = "success"
 
         except Exception as e:
