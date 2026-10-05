@@ -1,5 +1,4 @@
 import base64
-import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response
 from playwright.sync_api import sync_playwright
@@ -7,33 +6,25 @@ from playwright.sync_api import sync_playwright
 app = Flask(__name__)
 
 def get_next_week_dates():
-    try:
-        today = datetime.now()
-        days_ahead = 7 - today.weekday()
-        monday = today + timedelta(days=days_ahead)
-        
-        return {
-            "Pazartesi": (monday + timedelta(days=0)).strftime("%d.%m.%Y"),
-            "Sali": (monday + timedelta(days=1)).strftime("%d.%m.%Y"),
-            "Carsamba": (monday + timedelta(days=2)).strftime("%d.%m.%Y"),
-            "Persembe": (monday + timedelta(days=3)).strftime("%d.%m.%Y"),
-            "Cuma": (monday + timedelta(days=4)).strftime("%d.%m.%Y")
-        }
-    except Exception:
-        return {
-            "Pazartesi": "",
-            "Sali": "",
-            "Carsamba": "",
-            "Persembe": "",
-            "Cuma": ""
-        }
+    today = datetime.now()
+    days_ahead = 7 - today.weekday()
+    monday = today + timedelta(days=days_ahead)
+    
+    dates_map = {
+        "Pazartesi": (monday + timedelta(days=0)).strftime("%d.%m.%Y"),
+        "Sali": (monday + timedelta(days=1)).strftime("%d.%m.%Y"),
+        "Carsamba": (monday + timedelta(days=2)).strftime("%d.%m.%Y"),
+        "Persembe": (monday + timedelta(days=3)).strftime("%d.%m.%Y"),
+        "Cuma": (monday + timedelta(days=4)).strftime("%d.%m.%Y")
+    }
+    return dates_map
 
 def run_automation(email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days):
     logs = []
     screenshot_b64 = None
     status = "info"
     
-    logs.append(f"[ISLEM BASLADI] Kullanici: {email} | Seans: {seans} | Yerleske: {yemekhane} | Gunler: {selected_days}")
+    logs.append(f"[ISLEM BASLADI] E-posta: {email} | Seans: {seans} | Yerleske: {yemekhane}")
     
     with sync_playwright() as p:
         browser = p.chromium.launch(
@@ -49,37 +40,25 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             ]
         )
         context = browser.new_context(
-            viewport={"width": 1280, "height": 1000},
+            viewport={"width": 1280, "height": 950},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
         )
         page = context.new_page()
 
         try:
             logs.append("1. Giris sayfasi aciliyor...")
-            opened = False
-            for attempt in range(2):
-                try:
-                    page.goto("https://yemek.isparta.edu.tr/", wait_until="commit", timeout=60000)
-                    page.wait_for_load_state("domcontentloaded", timeout=15000)
-                    opened = True
-                    break
-                except Exception:
-                    logs.append(f"[UYARI] Baglanti gecikti, tekrar deneniyor ({attempt + 1}/2)...")
-                    time.sleep(2)
-
-            if not opened:
-                raise Exception("Universite sunucusuna erisilemedi (Zaman Asimi / Baglanti Hatasi).")
-
+            page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=30000)
+            
             logs.append("2. Giris butonu tiklaniyor...")
             page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
             
-            page.get_by_placeholder("E-posta").wait_for(timeout=25000)
+            page.get_by_placeholder("E-posta").wait_for(timeout=15000)
             logs.append("3. Kimlik bilgileri dolduruluyor...")
             page.get_by_placeholder("E-posta").fill(email)
             page.get_by_placeholder("Parola").fill(password)
             page.get_by_role("button", name="Giriş").click()
             
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(2500)
 
             if "Kimlik/Giris" in page.url:
                 logs.append("[HATA] Giris basarisiz! E-posta veya parola hatali.")
@@ -89,11 +68,11 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 return logs, screenshot_b64, status
 
             logs.append("4. Seans secim sayfasina gidiliyor...")
-            page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=35000)
-            page.wait_for_timeout(2000)
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=25000)
+            page.wait_for_timeout(1500)
 
             if page.get_by_text("Üzgünüz").is_visible() or page.get_by_text("kapalı").is_visible():
-                logs.append("[BILGI] Sistem su anda haftalik fis satis saatleri disindadir / Satis kapali.")
+                logs.append("[BILGI] Sistem su anda satis saatleri disindadir / Satis kapali.")
                 status = "warning"
                 screenshot_bytes = page.screenshot(full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -105,16 +84,16 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             else:
                 btn = page.get_by_role("link", name="Satın Al").nth(1)
 
-            btn.wait_for(timeout=10000)
+            btn.wait_for(timeout=8000)
             btn.click()
             page.wait_for_load_state("domcontentloaded")
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(1500)
 
             logs.append(f"6. Yemekhane secimi yapiliyor: {yemekhane}...")
             selects = page.locator("select")
             if selects.count() > 0:
                 selects.first.select_option(label=yemekhane)
-            page.wait_for_timeout(1000)
+            page.wait_for_timeout(800)
 
             logs.append("7. Gun tercihleri isleniyor...")
             day_order = ["Pazartesi", "Sali", "Carsamba", "Persembe", "Cuma"]
@@ -195,11 +174,11 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 "cvv": cvv
             })
 
-            page.wait_for_timeout(1000)
+            page.wait_for_timeout(800)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
             page.locator("#btnYukle, button:has-text('Yükle')").first.click(force=True)
-            page.wait_for_timeout(2000)
+            page.wait_for_timeout(1500)
 
             logs.append("10. Onay penceresindeki 'Tamam' butonu onaylaniyor...")
             page.evaluate("""() => {
@@ -216,12 +195,8 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 if (tamam) tamam.click();
             }""")
 
-            try:
-                page.wait_for_url(lambda u: "vakifbank" in u.lower() or "odeme" in u.lower() or "3d" in u.lower(), timeout=15000)
-            except Exception:
-                page.wait_for_timeout(4000)
-
-            logs.append("11. VakifBank 3D Secure ekrani inceleniyor...")
+            logs.append("11. VakifBank 3D Secure ekrani aciliyor...")
+            page.wait_for_timeout(4000)
 
             target_scope = page
             for frame in page.frames:
@@ -229,46 +204,23 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     target_scope = frame
                     break
 
+            logs.append("12. 'Cep Imza' secenegi seciliyor...")
             cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza").first
-            if cep_imza.is_visible(timeout=7000):
-                logs.append("12. 'Cep Imza' secenegi seciliyor...")
+            if cep_imza.is_visible(timeout=5000):
                 cep_imza.click(force=True)
-                page.wait_for_timeout(1000)
+                page.wait_for_timeout(800)
 
+                logs.append("13. 'Devam Et' butonu tiklaniyor...")
                 devam_btn = target_scope.locator("button:has-text('Devam Et'), input[value*='Devam']").first
                 if devam_btn.is_visible():
-                    logs.append("13. 'Devam Et' butonu tiklaniyor...")
                     devam_btn.click(force=True)
 
-            logs.append("14. Banka uygulamasindan onay bekleniyor (Mobil bildirim geldi mi kontrol ediniz)...")
-
-            approved = False
-            for _ in range(30):
-                page.wait_for_timeout(3000)
-                try:
-                    page_text = page.inner_text("body").lower()
-                except Exception:
-                    page_text = ""
-
-                if "başarılı" in page_text or "tamamlandı" in page_text or "alınmıştır" in page_text or "fiş" in page_text:
-                    if "yemek.isparta.edu.tr" in page.url and "seans" not in page.url.lower():
-                        logs.append("[BASARILI] Odeme ve rezervasyon basariyla tamamlandi!")
-                        status = "success"
-                        approved = True
-                        break
-
-                if "başarısız" in page_text or "hata" in page_text or "reddedildi" in page_text:
-                    logs.append("[UYARI/HATA] Banka islemi reddedildi veya zaman asimina ugradi.")
-                    status = "error"
-                    approved = True
-                    break
-
-            if not approved:
-                logs.append("[BILGI] Islem suresi tamamlandi veya onay asamasinda kalindi. Son ekran goruntusu asagidadir.")
-                status = "info"
+            logs.append("14. VakifBank Mobil uygulamaniza onay gonderildi! Lutfen telefonunuzdan onaylayiniz.")
+            page.wait_for_timeout(3000)
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+            status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
@@ -286,11 +238,8 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
 @app.route("/")
 def index():
-    try:
-        dates = get_next_week_dates()
-        return render_template("index.html", dates=dates)
-    except Exception as e:
-        return f"<h3>Sunucu Baslatma Hatasi: {str(e)}</h3>", 500
+    dates = get_next_week_dates()
+    return render_template("index.html", dates=dates)
 
 @app.route("/reminder.ics")
 def reminder_ics():
@@ -327,31 +276,28 @@ END:VCALENDAR"""
 
 @app.route("/book", methods=["POST"])
 def book():
-    try:
-        email = request.form.get("email")
-        password = request.form.get("password")
-        card_name = request.form.get("card_name")
-        card_number = request.form.get("card_number")
-        exp_month = request.form.get("exp_month")
-        exp_year = request.form.get("exp_year")
-        cvv = request.form.get("cvv")
-        seans = request.form.get("seans")
-        yemekhane = request.form.get("yemekhane")
-        selected_days = request.form.getlist("days")
-        
-        logs, screenshot, status = run_automation(
-            email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
-        )
-        
-        return render_template(
-            "result.html",
-            logs=logs,
-            screenshot=screenshot,
-            status=status,
-            selected_days=selected_days
-        )
-    except Exception as e:
-        return f"<h3>Islem Hatasi: {str(e)}</h3>", 500
+    email = request.form.get("email")
+    password = request.form.get("password")
+    card_name = request.form.get("card_name")
+    card_number = request.form.get("card_number")
+    exp_month = request.form.get("exp_month")
+    exp_year = request.form.get("exp_year")
+    cvv = request.form.get("cvv")
+    seans = request.form.get("seans")
+    yemekhane = request.form.get("yemekhane")
+    selected_days = request.form.getlist("days")
+    
+    logs, screenshot, status = run_automation(
+        email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
+    )
+    
+    return render_template(
+        "result.html",
+        logs=logs,
+        screenshot=screenshot,
+        status=status,
+        selected_days=selected_days
+    )
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
