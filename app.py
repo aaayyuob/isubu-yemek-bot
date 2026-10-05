@@ -106,68 +106,87 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                         chk.uncheck()
 
             logs.append("8. Kart bilgileri dolduruluyor...")
+            clean_card_no = card_number.replace(" ", "").strip()
             formatted_month = exp_month.zfill(2)
             formatted_year = str(exp_year).strip()
-            clean_card_no = card_number.replace(" ", "").strip()
 
             page.evaluate("""
-                ({cName, cNo, month, year, cvv}) => {
-                    const textInputs = Array.from(document.querySelectorAll("input[type='text']"));
-                    if (textInputs.length >= 2) {
-                        const nameEl = textInputs[textInputs.length - 2];
-                        const noEl = textInputs[textInputs.length - 1];
-                        nameEl.value = cName;
-                        nameEl.dispatchEvent(new Event('input', { bubbles: true }));
-                        nameEl.dispatchEvent(new Event('change', { bubbles: true }));
+                ({name, num}) => {
+                    const inputs = Array.from(document.querySelectorAll("input")).filter(i => i.type !== 'hidden' && i.type !== 'checkbox' && i.type !== 'password');
+                    if (inputs.length >= 2) {
+                        const nameInp = inputs[inputs.length - 2];
+                        const numInp = inputs[inputs.length - 1];
                         
-                        noEl.value = cNo;
-                        noEl.dispatchEvent(new Event('input', { bubbles: true }));
-                        noEl.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
+                        nameInp.value = name;
+                        nameInp.dispatchEvent(new Event('input', { bubbles: true }));
+                        nameInp.dispatchEvent(new Event('change', { bubbles: true }));
 
+                        numInp.value = num;
+                        numInp.dispatchEvent(new Event('input', { bubbles: true }));
+                        numInp.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            """, {"name": card_name, "num": clean_card_no})
+
+            name_field = page.locator("input[placeholder*='Sahibi'], input[placeholder*='Ad Soyad'], #KartSahibi, input[name*='KartSahibi']").first
+            if name_field.count() > 0:
+                name_field.click()
+                name_field.fill(card_name)
+            else:
+                card_txt_inputs = page.locator("input[type='text']")
+                if card_txt_inputs.count() >= 2:
+                    card_txt_inputs.nth(card_txt_inputs.count() - 2).click()
+                    card_txt_inputs.nth(card_txt_inputs.count() - 2).fill(card_name)
+
+            num_field = page.locator("input[placeholder*='Numarası'], input[placeholder*='kart'], #KartNo, input[name*='KartNo']").first
+            if num_field.count() > 0:
+                num_field.click()
+                num_field.press_sequentially(clean_card_no, delay=30)
+            else:
+                card_txt_inputs = page.locator("input[type='text']")
+                if card_txt_inputs.count() >= 1:
+                    card_txt_inputs.last.click()
+                    card_txt_inputs.last.press_sequentially(clean_card_no, delay=30)
+
+            page.evaluate("""
+                ({month, year}) => {
                     const monthSelect = document.querySelector('#ExpMonth, select[name*="ExpMonth"], select:nth-of-type(2)');
                     if (monthSelect) {
                         for (let opt of monthSelect.options) {
-                            if (opt.value === month || opt.text === month || parseInt(opt.value) === parseInt(month)) {
+                            if (opt.value === month || opt.text.trim() === month || parseInt(opt.value) === parseInt(month)) {
                                 monthSelect.value = opt.value;
                                 monthSelect.dispatchEvent(new Event('change', { bubbles: true }));
                                 break;
                             }
                         }
                     }
-
                     const yearSelect = document.querySelector('#ExpYear, select[name*="ExpYear"], select:nth-of-type(3)');
                     if (yearSelect) {
                         for (let opt of yearSelect.options) {
-                            if (opt.value === year || opt.text === year || opt.value.endsWith(year.slice(-2)) || opt.text.endsWith(year.slice(-2))) {
+                            if (opt.value === year || opt.text.trim() === year || opt.value.endsWith(year.slice(-2)) || opt.text.trim().endsWith(year.slice(-2))) {
                                 yearSelect.value = opt.value;
                                 yearSelect.dispatchEvent(new Event('change', { bubbles: true }));
                                 break;
                             }
                         }
                     }
+                }
+            """, {"month": formatted_month, "year": formatted_year})
 
-                    const passInputs = Array.from(document.querySelectorAll("input[type='password']"));
-                    if (passInputs.length > 0) {
-                        const cvvEl = passInputs[passInputs.length - 1];
-                        cvvEl.value = cvv;
-                        cvvEl.dispatchEvent(new Event('input', { bubbles: true }));
-                        cvvEl.dispatchEvent(new Event('change', { bubbles: true }));
-                    }
+            cvv_field = page.locator("#Cvv2, #CVV, input[name*='Cvv'], input[type='password']").last
+            if cvv_field.count() > 0:
+                cvv_field.click()
+                cvv_field.fill(cvv)
 
+            page.evaluate("""
+                () => {
                     const btn = document.querySelector('#btnYukle');
                     if (btn) {
                         btn.removeAttribute('disabled');
                         btn.disabled = false;
                     }
                 }
-            """, {
-                "cName": card_name,
-                "cNo": clean_card_no,
-                "month": formatted_month,
-                "year": formatted_year,
-                "cvv": cvv
-            })
+            """)
 
             page.wait_for_timeout(1000)
 
@@ -229,7 +248,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 def index():
     dates = get_next_week_dates()
     return render_template("index.html", dates=dates)
-    
+
 @app.route("/reminder.ics")
 def reminder_ics():
     now_utc = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
