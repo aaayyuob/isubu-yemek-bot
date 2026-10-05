@@ -7,18 +7,26 @@ from playwright.sync_api import sync_playwright
 app = Flask(__name__)
 
 def get_next_week_dates():
-    today = datetime.now()
-    days_ahead = 7 - today.weekday()
-    monday = today + timedelta(days=days_ahead)
-    
-    dates_map = {
-        "Pazartesi": (monday + timedelta(days=0)).strftime("%d.%m.%Y"),
-        "Sali": (monday + timedelta(days=1)).strftime("%d.%m.%Y"),
-        "Carsamba": (monday + timedelta(days=2)).strftime("%d.%m.%Y"),
-        "Persembe": (monday + timedelta(days=3)).strftime("%d.%m.%Y"),
-        "Cuma": (monday + timedelta(days=4)).strftime("%d.%m.%Y")
-    }
-    return dates_map
+    try:
+        today = datetime.now()
+        days_ahead = 7 - today.weekday()
+        monday = today + timedelta(days=days_ahead)
+        
+        return {
+            "Pazartesi": (monday + timedelta(days=0)).strftime("%d.%m.%Y"),
+            "Sali": (monday + timedelta(days=1)).strftime("%d.%m.%Y"),
+            "Carsamba": (monday + timedelta(days=2)).strftime("%d.%m.%Y"),
+            "Persembe": (monday + timedelta(days=3)).strftime("%d.%m.%Y"),
+            "Cuma": (monday + timedelta(days=4)).strftime("%d.%m.%Y")
+        }
+    except Exception:
+        return {
+            "Pazartesi": "",
+            "Sali": "",
+            "Carsamba": "",
+            "Persembe": "",
+            "Cuma": ""
+        }
 
 def run_automation(email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days):
     logs = []
@@ -278,8 +286,11 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
 @app.route("/")
 def index():
-    dates = get_next_week_dates()
-    return render_template("index.html", dates=dates)
+    try:
+        dates = get_next_week_dates()
+        return render_template("index.html", dates=dates)
+    except Exception as e:
+        return f"<h3>Sunucu Baslatma Hatasi: {str(e)}</h3>", 500
 
 @app.route("/reminder.ics")
 def reminder_ics():
@@ -316,28 +327,31 @@ END:VCALENDAR"""
 
 @app.route("/book", methods=["POST"])
 def book():
-    email = request.form.get("email")
-    password = request.form.get("password")
-    card_name = request.form.get("card_name")
-    card_number = request.form.get("card_number")
-    exp_month = request.form.get("exp_month")
-    exp_year = request.form.get("exp_year")
-    cvv = request.form.get("cvv")
-    seans = request.form.get("seans")
-    yemekhane = request.form.get("yemekhane")
-    selected_days = request.form.getlist("days")
-    
-    logs, screenshot, status = run_automation(
-        email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
-    )
-    
-    return render_template(
-        "result.html",
-        logs=logs,
-        screenshot=screenshot,
-        status=status,
-        selected_days=selected_days
-    )
+    try:
+        email = request.form.get("email")
+        password = request.form.get("password")
+        card_name = request.form.get("card_name")
+        card_number = request.form.get("card_number")
+        exp_month = request.form.get("exp_month")
+        exp_year = request.form.get("exp_year")
+        cvv = request.form.get("cvv")
+        seans = request.form.get("seans")
+        yemekhane = request.form.get("yemekhane")
+        selected_days = request.form.getlist("days")
+        
+        logs, screenshot, status = run_automation(
+            email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
+        )
+        
+        return render_template(
+            "result.html",
+            logs=logs,
+            screenshot=screenshot,
+            status=status,
+            selected_days=selected_days
+        )
+    except Exception as e:
+        return f"<h3>Islem Hatasi: {str(e)}</h3>", 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
