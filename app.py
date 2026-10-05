@@ -111,45 +111,24 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             formatted_year = str(exp_year).strip()
 
             page.evaluate("""
-                ({name, num}) => {
-                    const inputs = Array.from(document.querySelectorAll("input")).filter(i => i.type !== 'hidden' && i.type !== 'checkbox' && i.type !== 'password');
-                    if (inputs.length >= 2) {
-                        const nameInp = inputs[inputs.length - 2];
-                        const numInp = inputs[inputs.length - 1];
-                        
-                        nameInp.value = name;
-                        nameInp.dispatchEvent(new Event('input', { bubbles: true }));
-                        nameInp.dispatchEvent(new Event('change', { bubbles: true }));
+                ({name, num, month, year, cvv}) => {
+                    const cardSection = Array.from(document.querySelectorAll('div, section')).find(el => el.innerText && el.innerText.includes('Kart Bilgileri'));
+                    const container = cardSection || document;
+                    const inputs = Array.from(container.querySelectorAll('input')).filter(i => i.type !== 'checkbox' && i.type !== 'hidden' && i.type !== 'button' && i.type !== 'submit');
 
-                        numInp.value = num;
-                        numInp.dispatchEvent(new Event('input', { bubbles: true }));
-                        numInp.dispatchEvent(new Event('change', { bubbles: true }));
+                    if (inputs.length >= 1) {
+                        inputs[0].value = name;
+                        inputs[0].dispatchEvent(new Event('input', { bubbles: true }));
+                        inputs[0].dispatchEvent(new Event('change', { bubbles: true }));
                     }
-                }
-            """, {"name": card_name, "num": clean_card_no})
 
-            name_field = page.locator("input[placeholder*='Sahibi'], input[placeholder*='Ad Soyad'], #KartSahibi, input[name*='KartSahibi']").first
-            if name_field.count() > 0:
-                name_field.click()
-                name_field.fill(card_name)
-            else:
-                card_txt_inputs = page.locator("input[type='text']")
-                if card_txt_inputs.count() >= 2:
-                    card_txt_inputs.nth(card_txt_inputs.count() - 2).click()
-                    card_txt_inputs.nth(card_txt_inputs.count() - 2).fill(card_name)
+                    if (inputs.length >= 2) {
+                        inputs[1].value = num;
+                        inputs[1].dispatchEvent(new Event('input', { bubbles: true }));
+                        inputs[1].dispatchEvent(new Event('change', { bubbles: true }));
+                        inputs[1].dispatchEvent(new Event('keyup', { bubbles: true }));
+                    }
 
-            num_field = page.locator("input[placeholder*='Numarası'], input[placeholder*='kart'], #KartNo, input[name*='KartNo']").first
-            if num_field.count() > 0:
-                num_field.click()
-                num_field.press_sequentially(clean_card_no, delay=30)
-            else:
-                card_txt_inputs = page.locator("input[type='text']")
-                if card_txt_inputs.count() >= 1:
-                    card_txt_inputs.last.click()
-                    card_txt_inputs.last.press_sequentially(clean_card_no, delay=30)
-
-            page.evaluate("""
-                ({month, year}) => {
                     const monthSelect = document.querySelector('#ExpMonth, select[name*="ExpMonth"], select:nth-of-type(2)');
                     if (monthSelect) {
                         for (let opt of monthSelect.options) {
@@ -160,6 +139,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                             }
                         }
                     }
+
                     const yearSelect = document.querySelector('#ExpYear, select[name*="ExpYear"], select:nth-of-type(3)');
                     if (yearSelect) {
                         for (let opt of yearSelect.options) {
@@ -170,23 +150,26 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                             }
                         }
                     }
-                }
-            """, {"month": formatted_month, "year": formatted_year})
 
-            cvv_field = page.locator("#Cvv2, #CVV, input[name*='Cvv'], input[type='password']").last
-            if cvv_field.count() > 0:
-                cvv_field.click()
-                cvv_field.fill(cvv)
+                    if (inputs.length >= 3) {
+                        inputs[2].value = cvv;
+                        inputs[2].dispatchEvent(new Event('input', { bubbles: true }));
+                        inputs[2].dispatchEvent(new Event('change', { bubbles: true }));
+                    }
 
-            page.evaluate("""
-                () => {
                     const btn = document.querySelector('#btnYukle');
                     if (btn) {
                         btn.removeAttribute('disabled');
                         btn.disabled = false;
                     }
                 }
-            """)
+            """, {
+                "name": card_name,
+                "num": clean_card_no,
+                "month": formatted_month,
+                "year": formatted_year,
+                "cvv": cvv
+            })
 
             page.wait_for_timeout(1000)
 
