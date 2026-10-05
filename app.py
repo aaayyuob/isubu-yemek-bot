@@ -1,4 +1,5 @@
 import base64
+import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response
 from playwright.sync_api import sync_playwright
@@ -174,48 +175,83 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             page.wait_for_timeout(1000)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
-            page.evaluate("""
-                () => {
-                    const btn = document.querySelector('#btnYukle');
-                    if (btn) btn.click();
-                }
-            """)
+            page.locator("#btnYukle, button:has-text('Yükle')").first.click(force=True)
             page.wait_for_timeout(1500)
 
-            page.evaluate("""
-                () => {
-                    const modal = document.querySelector('#confirm_modal');
-                    if (modal) {
-                        const confirmBtn = modal.querySelector('button.btn-primary, button.btn-success, button[type="submit"]');
-                        if (confirmBtn) {
-                            confirmBtn.click();
-                        } else {
-                            const btns = Array.from(modal.querySelectorAll('button'));
-                            const yesBtn = btns.find(b => b.innerText.includes('Evet') || b.innerText.includes('Onay'));
-                            if (yesBtn) yesBtn.click();
-                        }
-                    }
-                }
-            """)
+            logs.append("10. Onay penceresindeki 'Tamam' butonu onaylaniyor...")
+            tamam_btn = page.locator("button:has-text('Tamam'), .swal2-confirm, button:has-text('Evet')").first
+            if tamam_btn.is_visible():
+                tamam_btn.click(force=True)
+            else:
+                page.evaluate("""() => {
+                    const buttons = Array.from(document.querySelectorAll('button'));
+                    const target = buttons.find(b => b.innerText.trim() === 'Tamam' || b.innerText.includes('Tamam'));
+                    if (target) target.click();
+                }""")
 
-            logs.append("10. Banka 3D Secure / Onay sayfasina gecis bekleniyor...")
+            logs.append("11. VakifBank 3D Secure ekranina yonlendiriliyor...")
             
-            try:
-                page.wait_for_load_state("networkidle", timeout=12000)
-            except Exception:
-                page.wait_for_timeout(5000)
+            # انتظار ظهور شاشة البنك
+            page.wait_for_timeout(4000)
+
+            # التعامل مع نافذة البنك سواء كانت في نفس الصفحة أو داخل iframe
+            target_scope = page
+            if page.locator("iframe").count() > 0:
+                for frame in page.frames:
+                    if "vakifbank" in frame.url.lower() or frame.locator("text=Cep İmza").count() > 0:
+                        target_scope = frame
+                        break
+
+            logs.append("12. 'Cep Imza' secenegi seciliyor...")
+            cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza").first
+            if cep_imza.is_visible():
+                cep_imza.click(force=True)
+            else:
+                target_scope.evaluate("""() => {
+                    const el = Array.from(document.querySelectorAll('div, label, span, p')).find(e => e.innerText && e.innerText.includes('Cep İmza'));
+                    if (el) el.click();
+                }""")
+
+            page.wait_for_timeout(1000)
+
+            logs.append("13. 'Devam Et' butonu tiklaniyor...")
+            devam_btn = target_scope.locator("button:has-text('Devam Et'), input[value*='Devam']").first
+            if devam_btn.is_visible():
+                devam_btn.click(force=True)
+            else:
+                target_scope.evaluate("""() => {
+                    const el = Array.from(document.querySelectorAll('button, input, a')).find(e => (e.innerText || e.value || '').includes('Devam'));
+                    if (el) el.click();
+                }""")
+
+            logs.append("14. Banka uygulamasindan (Mobil Imza) onay bekleniyor... (Lutfen telefonunuzdan onaylayiniz)")
+
+            # انتظار عودة المتصفح لنظام الجامعة بعد تأكيدك في تطبيق البنك
+            approved = False
+            for _ in range(30):  # فحص لمدة تصل إلى 90 ثانية
+                page.wait_for_timeout(3000)
+                page_text = page.inner_text("body").lower()
+                
+                # علامات إتمام العملية وعودة نظام الجامعة
+                if "başarılı" in page_text or "tamamlandı" in page_text or "alınmıştır" in page_text or "fiş" in page_text:
+                    if "yemek.isparta.edu.tr" in page.url and "seans" not in page.url.lower():
+                        logs.append("[BASARILI] Odeme ve rezervasyon basariyla tamamlandi!")
+                        status = "success"
+                        approved = True
+                        break
+
+                if "başarısız" in page_text or "hata" in page_text or "reddedildi" in page_text:
+                    logs.append("[UYARI/HATA] Banka islemi reddedildi veya zaman asimina ugradi.")
+                    status = "error"
+                    approved = True
+                    break
+
+            if not approved:
+                logs.append("[BILGI] Islem suresi tamamlandi. Son ekran goruntusu asagidadir.")
+                status = "info"
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-
-            if page.locator(".alert-danger, .validation-summary-errors, .field-validation-error").is_visible() or \
-               page.get_by_text("Hata").is_visible() or \
-               page.get_by_text("Geçersiz").is_visible():
-                logs.append("[HATA] Odeme bilgileri hatali veya banka islemi reddetti!")
-                status = "error"
-            else:
-                logs.append("11. Banka ekranina ulasildi! Lutfen SMS kodunu kontrol ediniz.")
-                status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
