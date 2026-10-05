@@ -7,16 +7,16 @@
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background: #f4f6f9; margin: 0; padding: 15px; display: flex; justify-content: center; }
-    .card { background: white; padding: 25px; border-radius: 12px; width: 100%; max-width: 480px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .card { background: white; padding: 25px; border-radius: 14px; width: 100%; max-width: 480px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
     h2 { margin-top: 0; color: #1e3a8a; text-align: center; }
-    h4 { margin: 15px 0 8px 0; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
+    h4 { margin: 18px 0 8px 0; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
     label { display: block; margin-top: 10px; font-weight: 600; font-size: 13px; color: #4b5563; }
-    input[type="text"], input[type="password"], select { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+    input[type="text"], input[type="password"], select { width: 100%; padding: 11px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; }
     .row { display: flex; gap: 10px; }
     .row > div { flex: 1; }
-    .days-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-    .day-item { display: flex; align-items: center; background: #f9fafb; padding: 8px; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 13px; }
-    .day-item input { margin-right: 8px; }
+    .days-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
+    .day-item { display: flex; align-items: center; background: #f9fafb; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 13px; }
+    .day-item input { margin-right: 10px; transform: scale(1.1); }
     button { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; }
     button:hover { background: #1d4ed8; }
   </style>
@@ -30,6 +30,44 @@
       <input type="text" name="email" placeholder="ornek@isparta.edu.tr" required>
       <label>Sifre (Parola)</label>
       <input type="password" name="password" required>
+
+      <h4>Yemekhane ve Seans</h4>
+      <label>Yemekhane Secimi</label>
+      <select name="yemekhane" required>
+        <option value="100.Yıl Yerleşkesi" selected>100.Yıl Yerleşkesi</option>
+        <option value="Aksu MYO">Aksu MYO</option>
+        <option value="Atabey MYO">Atabey MYO</option>
+        <option value="Çiftçi Eğitim Merkezi">Çiftçi Eğitim Merkezi</option>
+        <option value="Eğirdir MYO">Eğirdir MYO</option>
+        <option value="Gelendost MYO">Gelendost MYO</option>
+        <option value="Gönen MYO">Gönen MYO</option>
+        <option value="Keçiborlu MYO">Keçiborlu MYO</option>
+        <option value="OSB MYO">OSB MYO</option>
+        <option value="REKTÖRLÜK YEMEKHANESİ">REKTÖRLÜK YEMEKHANESİ</option>
+        <option value="Senirkent MYO">Senirkent MYO</option>
+        <option value="Sütçüler Prof.Dr. Hasan Gürbüz MYO">Sütçüler Prof.Dr. Hasan Gürbüz MYO</option>
+        <option value="Şarkikaraağaç Turizm MYO">Şarkikaraağaç Turizm MYO</option>
+        <option value="Teknik Bilimler MYO">Teknik Bilimler MYO</option>
+        <option value="Turizm Fakültesi">Turizm Fakültesi</option>
+        <option value="Uluborlu Selahattin Karasoy MYO">Uluborlu Selahattin Karasoy MYO</option>
+        <option value="Yalvaç Teknik Bilimler MYO">Yalvaç Teknik Bilimler MYO</option>
+        <option value="Yenişarbademli MYO">Yenişarbademli MYO</option>
+      </select>
+
+      <label>Seans Secimi</label>
+      <select name="seans">
+        <option value="Ogle">Ogle Yemegi</option>
+        <option value="Aksam">Aksam Yemegi</option>
+      </select>
+
+      <h4>Yemek Alinacak Gunler</h4>
+      <div class="days-grid">
+        <label class="day-item"><input type="checkbox" name="days" value="Pazartesi" checked> Pazartesi ({{ dates['Pazartesi'] }})</label>
+        <label class="day-item"><input type="checkbox" name="days" value="Sali" checked> Sali ({{ dates['Sali'] }})</label>
+        <label class="day-item"><input type="checkbox" name="days" value="Carsamba" checked> Carsamba ({{ dates['Carsamba'] }})</label>
+        <label class="day-item"><input type="checkbox" name="days" value="Persembe" checked> Persembe ({{ dates['Persembe'] }})</label>
+        <label class="day-item"><input type="checkbox" name="days" value="Cuma" checked> Cuma ({{ dates['Cuma'] }})</label>
+      </div>
 
       <h4>Kart Bilgileri</h4>
       <label>Kart Uzerindeki Isim</label>
@@ -51,23 +89,7 @@
         </div>
       </div>
 
-      <h4>Yemek Tercihleri</h4>
-      <label>Seans Secimi</label>
-      <select name="seans">
-        <option value="Ogle">Ogle Yemegi</option>
-        <option value="Aksam">Aksam Yemegi</option>
-      </select>
-
-      <label>Gun Secimi</label>
-      <div class="days-grid">
-        <label class="day-item"><input type="checkbox" name="days" value="Pazartesi" checked> Pazartesi</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Sali" checked> Sali</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Carsamba" checked> Carsamba</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Persembe" checked> Persembe</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Cuma" checked> Cuma</label>
-      </div>
-
-      <button type="submit">Sisteme Baglan ve Rezervasyon Yap</button>
+      <button type="submit">Sisteme Baglan ve Satin Al</button>
     </form>
   </div>
 </body>
