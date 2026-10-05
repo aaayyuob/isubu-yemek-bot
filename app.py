@@ -174,44 +174,48 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             page.wait_for_timeout(1000)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
-            current_url = page.url
-
-            btn_yukle = page.locator("#btnYukle")
-            if btn_yukle.count() > 0:
-                btn_yukle.click(force=True)
-            else:
-                page.locator("button:has-text('Yükle')").first.click(force=True)
-
+            page.evaluate("""
+                () => {
+                    const btn = document.querySelector('#btnYukle');
+                    if (btn) btn.click();
+                }
+            """)
             page.wait_for_timeout(1500)
 
-            confirm_btn = page.locator("#confirm_modal button:has-text('Evet'), #confirm_modal .btn-primary, #confirm_modal .btn-success")
-            if confirm_btn.is_visible():
-                confirm_btn.first.click()
+            page.evaluate("""
+                () => {
+                    const modal = document.querySelector('#confirm_modal');
+                    if (modal) {
+                        const confirmBtn = modal.querySelector('button.btn-primary, button.btn-success, button[type="submit"]');
+                        if (confirmBtn) {
+                            confirmBtn.click();
+                        } else {
+                            const btns = Array.from(modal.querySelectorAll('button'));
+                            const yesBtn = btns.find(b => b.innerText.includes('Evet') || b.innerText.includes('Onay'));
+                            if (yesBtn) yesBtn.click();
+                        }
+                    }
+                }
+            """)
 
-            payment_completed = False
-            for _ in range(15):
-                page.wait_for_timeout(1000)
-                
-                if page.locator(".alert-danger, .validation-summary-errors, .field-validation-error").is_visible() or \
-                   page.get_by_text("Hata").is_visible() or \
-                   page.get_by_text("Geçersiz").is_visible() or \
-                   page.get_by_text("Başarısız").is_visible():
-                    logs.append("[HATA] Odeme bilgileri hatali veya banka islemi reddetti!")
-                    status = "error"
-                    payment_completed = True
-                    break
-                
-                if page.url != current_url or page.locator("iframe, text=SMS, text=Doğrulama, text=Onay").is_visible():
-                    logs.append("10. Odeme basarili sekilde tetiklendi, Banka 3D Secure / SMS onay ekranina yonlendirildi.")
-                    status = "success"
-                    payment_completed = True
-                    break
-
-            if not payment_completed:
-                logs.append("[BILGI] Islem tamamlandi, guncel durum asagidaki ekranda gosterilmektedir.")
+            logs.append("10. Banka 3D Secure / Onay sayfasina gecis bekleniyor...")
+            
+            try:
+                page.wait_for_load_state("networkidle", timeout=12000)
+            except Exception:
+                page.wait_for_timeout(5000)
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+
+            if page.locator(".alert-danger, .validation-summary-errors, .field-validation-error").is_visible() or \
+               page.get_by_text("Hata").is_visible() or \
+               page.get_by_text("Geçersiz").is_visible():
+                logs.append("[HATA] Odeme bilgileri hatali veya banka islemi reddetti!")
+                status = "error"
+            else:
+                logs.append("11. Banka ekranina ulasildi! Lutfen SMS kodunu kontrol ediniz.")
+                status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
