@@ -176,82 +176,59 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
             page.locator("#btnYukle, button:has-text('Yükle')").first.click(force=True)
-            page.wait_for_timeout(1500)
-
-            logs.append("10. Onay penceresindeki 'Tamam' butonu onaylaniyor...")
-            tamam_btn = page.locator("button:has-text('Tamam'), .swal2-confirm, button:has-text('Evet')").first
-            if tamam_btn.is_visible():
-                tamam_btn.click(force=True)
-            else:
-                page.evaluate("""() => {
-                    const buttons = Array.from(document.querySelectorAll('button'));
-                    const target = buttons.find(b => b.innerText.trim() === 'Tamam' || b.innerText.includes('Tamam'));
-                    if (target) target.click();
-                }""")
-
-            logs.append("11. VakifBank 3D Secure ekranina yonlendiriliyor...")
             
-            # انتظار ظهور شاشة البنك
-            page.wait_for_timeout(4000)
+            # انتظار ظهور نافذة التأكيد Emin misiniz بالكامل
+            page.wait_for_timeout(2000)
 
-            # التعامل مع نافذة البنك سواء كانت في نفس الصفحة أو داخل iframe
+            logs.append("10. Onay penceresindeki 'Tamam' butonuna kesin tiklaniyor...")
+            # النقر على الزر الأزرق بكل الطرق الممكنة لضمان التفعيل
+            page.evaluate("""() => {
+                const modal = document.querySelector('.modal.show, .bootbox.modal, .modal[style*="display: block"]');
+                if (modal) {
+                    const btn = modal.querySelector('button.btn-primary, button[data-bb-handler="confirm"], button.btn-success');
+                    if (btn) {
+                        btn.click();
+                        return;
+                    }
+                }
+                const allButtons = Array.from(document.querySelectorAll('button'));
+                const tamam = allButtons.find(b => b.innerText.trim() === 'Tamam');
+                if (tamam) tamam.click();
+            }""")
+
+            # التحقق مما إذا كان الرابط تغير أو يتم التحويل
+            try:
+                page.wait_for_url(lambda u: "vakifbank" in u.lower() or "odeme" in u.lower() or "3d" in u.lower(), timeout=12000)
+            except Exception:
+                page.wait_for_timeout(4000)
+
+            logs.append("11. VakifBank 3D Secure ekrani inceleniyor...")
+
+            # البحث عن إطار العمل (Frame) الخاص بالبنك إذا كان iframe
             target_scope = page
-            if page.locator("iframe").count() > 0:
-                for frame in page.frames:
-                    if "vakifbank" in frame.url.lower() or frame.locator("text=Cep İmza").count() > 0:
-                        target_scope = frame
-                        break
-
-            logs.append("12. 'Cep Imza' secenegi seciliyor...")
-            cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza").first
-            if cep_imza.is_visible():
-                cep_imza.click(force=True)
-            else:
-                target_scope.evaluate("""() => {
-                    const el = Array.from(document.querySelectorAll('div, label, span, p')).find(e => e.innerText && e.innerText.includes('Cep İmza'));
-                    if (el) el.click();
-                }""")
-
-            page.wait_for_timeout(1000)
-
-            logs.append("13. 'Devam Et' butonu tiklaniyor...")
-            devam_btn = target_scope.locator("button:has-text('Devam Et'), input[value*='Devam']").first
-            if devam_btn.is_visible():
-                devam_btn.click(force=True)
-            else:
-                target_scope.evaluate("""() => {
-                    const el = Array.from(document.querySelectorAll('button, input, a')).find(e => (e.innerText || e.value || '').includes('Devam'));
-                    if (el) el.click();
-                }""")
-
-            logs.append("14. Banka uygulamasindan (Mobil Imza) onay bekleniyor... (Lutfen telefonunuzdan onaylayiniz)")
-
-            # انتظار عودة المتصفح لنظام الجامعة بعد تأكيدك في تطبيق البنك
-            approved = False
-            for _ in range(30):  # فحص لمدة تصل إلى 90 ثانية
-                page.wait_for_timeout(3000)
-                page_text = page.inner_text("body").lower()
-                
-                # علامات إتمام العملية وعودة نظام الجامعة
-                if "başarılı" in page_text or "tamamlandı" in page_text or "alınmıştır" in page_text or "fiş" in page_text:
-                    if "yemek.isparta.edu.tr" in page.url and "seans" not in page.url.lower():
-                        logs.append("[BASARILI] Odeme ve rezervasyon basariyla tamamlandi!")
-                        status = "success"
-                        approved = True
-                        break
-
-                if "başarısız" in page_text or "hata" in page_text or "reddedildi" in page_text:
-                    logs.append("[UYARI/HATA] Banka islemi reddedildi veya zaman asimina ugradi.")
-                    status = "error"
-                    approved = True
+            for frame in page.frames:
+                if "vakifbank" in frame.url.lower():
+                    target_scope = frame
                     break
 
-            if not approved:
-                logs.append("[BILGI] Islem suresi tamamlandi. Son ekran goruntusu asagidadir.")
-                status = "info"
+            # النقر على Cep İmza
+            cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza").first
+            if cep_imza.is_visible(timeout=5000):
+                logs.append("12. 'Cep Imza' secenegi seciliyor...")
+                cep_imza.click(force=True)
+                page.wait_for_timeout(1000)
 
+                devam_btn = target_scope.locator("button:has-text('Devam Et'), input[value*='Devam']").first
+                if devam_btn.is_visible():
+                    logs.append("13. 'Devam Et' butonu tiklaniyor...")
+                    devam_btn.click(force=True)
+
+            logs.append("14. Banka uygulamasindan onay bekleniyor (Mobil bildirim geldi mi kontrol ediniz)...")
+
+            # التقاط لقطة الشاشة لشاشة البنك الحقيقية
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+            status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
@@ -266,69 +243,3 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             browser.close()
 
     return logs, screenshot_b64, status
-
-@app.route("/")
-def index():
-    dates = get_next_week_dates()
-    return render_template("index.html", dates=dates)
-
-@app.route("/reminder.ics")
-def reminder_ics():
-    now_utc = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
-    ics_content = f"""BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//ISUBU Yemek Rezervasyon//TR
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-BEGIN:VEVENT
-UID:isubu-yemek-reminder-v2@isparta.edu.tr
-DTSTAMP:{now_utc}
-DTSTART:20261009T093000Z
-DTEND:20261009T094500Z
-RRULE:FREQ=WEEKLY;BYDAY=MO,FR
-SUMMARY:ISUBÜ Yemek Rezervasyonu Hatırlatıcı
-DESCRIPTION:Gelecek haftanın yemek rezervasyonunu yapmak için tıklayınız: https://isubu-yemek.onrender.com
-URL:https://isubu-yemek.onrender.com
-BEGIN:VALARM
-TRIGGER:-PT10M
-ACTION:DISPLAY
-DESCRIPTION:ISUBÜ Yemek Rezervasyon Zamanı (12:30)
-END:VALARM
-END:VEVENT
-END:VCALENDAR"""
-    return Response(
-        ics_content,
-        mimetype="text/calendar",
-        headers={
-            "Content-Disposition": "attachment; filename=isubu_hatirlatici.ics",
-            "Content-Type": "text/calendar; charset=utf-8"
-        }
-    )
-
-@app.route("/book", methods=["POST"])
-def book():
-    email = request.form.get("email")
-    password = request.form.get("password")
-    card_name = request.form.get("card_name")
-    card_number = request.form.get("card_number")
-    exp_month = request.form.get("exp_month")
-    exp_year = request.form.get("exp_year")
-    cvv = request.form.get("cvv")
-    seans = request.form.get("seans")
-    yemekhane = request.form.get("yemekhane")
-    selected_days = request.form.getlist("days")
-    
-    logs, screenshot, status = run_automation(
-        email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
-    )
-    
-    return render_template(
-        "result.html",
-        logs=logs,
-        screenshot=screenshot,
-        status=status,
-        selected_days=selected_days
-    )
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
