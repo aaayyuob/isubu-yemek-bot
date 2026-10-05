@@ -40,17 +40,32 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 "--single-process"
             ]
         )
-        context = browser.new_context(viewport={"width": 1280, "height": 1000})
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 1000},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
 
         try:
             logs.append("1. Giris sayfasi aciliyor...")
-            page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=45000)
-            
+            opened = False
+            for attempt in range(2):
+                try:
+                    page.goto("https://yemek.isparta.edu.tr/", wait_until="commit", timeout=60000)
+                    page.wait_for_load_state("domcontentloaded", timeout=15000)
+                    opened = True
+                    break
+                except Exception:
+                    logs.append(f"[UYARI] Baglanti gecikti, tekrar deneniyor ({attempt + 1}/2)...")
+                    time.sleep(2)
+
+            if not opened:
+                raise Exception("Universite sunucusuna erisilemedi (Zaman Asimi / Baglanti Hatasi).")
+
             logs.append("2. Giris butonu tiklaniyor...")
             page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
             
-            page.get_by_placeholder("E-posta").wait_for(timeout=20000)
+            page.get_by_placeholder("E-posta").wait_for(timeout=25000)
             logs.append("3. Kimlik bilgileri dolduruluyor...")
             page.get_by_placeholder("E-posta").fill(email)
             page.get_by_placeholder("Parola").fill(password)
@@ -66,7 +81,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 return logs, screenshot_b64, status
 
             logs.append("4. Seans secim sayfasina gidiliyor...")
-            page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=30000)
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/SeansSecim", wait_until="domcontentloaded", timeout=35000)
             page.wait_for_timeout(2000)
 
             if page.get_by_text("Üzgünüz").is_visible() or page.get_by_text("kapalı").is_visible():
