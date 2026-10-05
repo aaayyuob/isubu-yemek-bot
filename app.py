@@ -229,7 +229,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 def index():
     dates = get_next_week_dates()
     return render_template("index.html", dates=dates)
-
+    
 @app.route("/reminder.ics")
 def reminder_ics():
     now_utc = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
@@ -239,10 +239,10 @@ PRODID:-//ISUBU Yemek Rezervasyon//TR
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 BEGIN:VEVENT
-UID:isubu-yemek-reminder@isparta.edu.tr
+UID:isubu-yemek-reminder-v2@isparta.edu.tr
 DTSTAMP:{now_utc}
-DTSTART;TZID=Europe/Istanbul:20261005T123000
-DTEND;TZID=Europe/Istanbul:20261005T124500
+DTSTART:20261009T093000Z
+DTEND:20261009T094500Z
 RRULE:FREQ=WEEKLY;BYDAY=MO,FR
 SUMMARY:ISUBÜ Yemek Rezervasyonu Hatırlatıcı
 DESCRIPTION:Gelecek haftanın yemek rezervasyonunu yapmak için tıklayınız: https://isubu-yemek.onrender.com
@@ -254,7 +254,14 @@ DESCRIPTION:ISUBÜ Yemek Rezervasyon Zamanı (12:30)
 END:VALARM
 END:VEVENT
 END:VCALENDAR"""
-    return Response(ics_content, mimetype="text/calendar", headers={"Content-Disposition": "attachment; filename=isubu_yemek_hatirlatici.ics"})
+    return Response(
+        ics_content,
+        mimetype="text/calendar",
+        headers={
+            "Content-Disposition": "attachment; filename=isubu_hatirlatici.ics",
+            "Content-Type": "text/calendar; charset=utf-8"
+        }
+    )
 
 @app.route("/book", methods=["POST"])
 def book():
