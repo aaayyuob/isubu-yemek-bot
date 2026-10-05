@@ -228,12 +228,26 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     if (btn) btn.click();
                 }""")
 
-            logs.append("14. 'Devam Et' butonuna tiklandi! Banka uygulamaniza (VakifBank Mobil) onay gonderildi.")
-            page.wait_for_timeout(3500)
+            logs.append("14. 'Devam Et' butonuna tiklandi! Mobil banka bildirimini telefonunuzdan hemen onaylayiniz...")
+
+            # انتظار قيامك بتأكيد العملية في هاتفك وعودة المتصفح لصفحة الجامعة
+            # مدة الفحص 15 ثانية (ضمن مهلة سيرفر ريندر الآمنة)
+            returned_to_system = False
+            for _ in range(15):
+                page.wait_for_timeout(1000)
+                if "isparta.edu.tr" in page.url and "vakifbank" not in page.url.lower():
+                    logs.append("15. Banka onayi algilandi! Universite sistemine basariyla donuldu.")
+                    status = "success"
+                    returned_to_system = True
+                    page.wait_for_timeout(2000)
+                    break
+
+            if not returned_to_system:
+                logs.append("[BILGI] Sure sinirina ulasildi. Onay tamamlandiysa son durum asagidaki ekranda gosterilmektedir.")
+                status = "success"
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-            status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
