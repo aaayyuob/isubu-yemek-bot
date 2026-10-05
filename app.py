@@ -1,6 +1,6 @@
 import base64
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, Response
 from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
@@ -106,17 +106,25 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                         chk.uncheck()
 
             logs.append("8. Kart bilgileri dolduruluyor...")
-            all_text_inputs = page.locator("input[type='text']")
-            count_texts = all_text_inputs.count()
-            if count_texts >= 2:
-                all_text_inputs.nth(count_texts - 2).fill(card_name)
-                all_text_inputs.nth(count_texts - 1).fill(card_number)
-
             formatted_month = exp_month.zfill(2)
             formatted_year = str(exp_year).strip()
-            
+            clean_card_no = card_number.replace(" ", "").strip()
+
             page.evaluate("""
-                ({month, year}) => {
+                ({cName, cNo, month, year, cvv}) => {
+                    const textInputs = Array.from(document.querySelectorAll("input[type='text']"));
+                    if (textInputs.length >= 2) {
+                        const nameEl = textInputs[textInputs.length - 2];
+                        const noEl = textInputs[textInputs.length - 1];
+                        nameEl.value = cName;
+                        nameEl.dispatchEvent(new Event('input', { bubbles: true }));
+                        nameEl.dispatchEvent(new Event('change', { bubbles: true }));
+                        
+                        noEl.value = cNo;
+                        noEl.dispatchEvent(new Event('input', { bubbles: true }));
+                        noEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
                     const monthSelect = document.querySelector('#ExpMonth, select[name*="ExpMonth"], select:nth-of-type(2)');
                     if (monthSelect) {
                         for (let opt of monthSelect.options) {
@@ -127,6 +135,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                             }
                         }
                     }
+
                     const yearSelect = document.querySelector('#ExpYear, select[name*="ExpYear"], select:nth-of-type(3)');
                     if (yearSelect) {
                         for (let opt of yearSelect.options) {
@@ -137,16 +146,45 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                             }
                         }
                     }
-                }
-            """, {"month": formatted_month, "year": formatted_year})
 
-            all_pass_inputs = page.locator("input[type='password']")
-            if all_pass_inputs.count() > 0:
-                all_pass_inputs.last.fill(cvv)
+                    const passInputs = Array.from(document.querySelectorAll("input[type='password']"));
+                    if (passInputs.length > 0) {
+                        const cvvEl = passInputs[passInputs.length - 1];
+                        cvvEl.value = cvv;
+                        cvvEl.dispatchEvent(new Event('input', { bubbles: true }));
+                        cvvEl.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    const btn = document.querySelector('#btnYukle');
+                    if (btn) {
+                        btn.removeAttribute('disabled');
+                        btn.disabled = false;
+                    }
+                }
+            """, {
+                "cName": card_name,
+                "cNo": clean_card_no,
+                "month": formatted_month,
+                "year": formatted_year,
+                "cvv": cvv
+            })
+
+            page.wait_for_timeout(1000)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
             current_url = page.url
-            page.locator("button:has-text('Yükle'), input[value='Yükle'], .btn:has-text('Yükle')").first.click()
+
+            btn_yukle = page.locator("#btnYukle")
+            if btn_yukle.count() > 0:
+                btn_yukle.click(force=True)
+            else:
+                page.locator("button:has-text('Yükle')").first.click(force=True)
+
+            page.wait_for_timeout(1500)
+
+            confirm_btn = page.locator("#confirm_modal button:has-text('Evet'), #confirm_modal .btn-primary, #confirm_modal .btn-success")
+            if confirm_btn.is_visible():
+                confirm_btn.first.click()
 
             payment_completed = False
             for _ in range(15):
@@ -191,6 +229,32 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 def index():
     dates = get_next_week_dates()
     return render_template("index.html", dates=dates)
+
+@app.route("/reminder.ics")
+def reminder_ics():
+    now_utc = datetime.utcnow().strftime("%Y%m%dT%H%M%SZ")
+    ics_content = f"""BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//ISUBU Yemek Rezervasyon//TR
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+BEGIN:VEVENT
+UID:isubu-yemek-reminder@isparta.edu.tr
+DTSTAMP:{now_utc}
+DTSTART;TZID=Europe/Istanbul:20261005T123000
+DTEND;TZID=Europe/Istanbul:20261005T124500
+RRULE:FREQ=WEEKLY;BYDAY=MO,FR
+SUMMARY:ISUBÜ Yemek Rezervasyonu Hatırlatıcı
+DESCRIPTION:Gelecek haftanın yemek rezervasyonunu yapmak için tıklayınız: https://isubu-yemek.onrender.com
+URL:https://isubu-yemek.onrender.com
+BEGIN:VALARM
+TRIGGER:-PT10M
+ACTION:DISPLAY
+DESCRIPTION:ISUBÜ Yemek Rezervasyon Zamanı (12:30)
+END:VALARM
+END:VEVENT
+END:VCALENDAR"""
+    return Response(ics_content, mimetype="text/calendar", headers={"Content-Disposition": "attachment; filename=isubu_yemek_hatirlatici.ics"})
 
 @app.route("/book", methods=["POST"])
 def book():
