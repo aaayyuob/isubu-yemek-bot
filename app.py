@@ -39,7 +39,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 "--single-process"
             ]
         )
-        context = browser.new_context(viewport={"width": 1280, "height": 900})
+        context = browser.new_context(viewport={"width": 1280, "height": 1000})
         page = context.new_page()
 
         try:
@@ -93,45 +93,64 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             page.wait_for_timeout(1000)
 
             logs.append("7. Gun tercihleri isleniyor...")
-            day_names = {
-                "Pazartesi": "Pazartesi",
-                "Sali": "Salı",
-                "Carsamba": "Çarşamba",
-                "Persembe": "Perşembe",
-                "Cuma": "Cuma"
-            }
+            day_order = ["Pazartesi", "Sali", "Carsamba", "Persembe", "Cuma"]
+            checkboxes = page.locator("input[type='checkbox']")
+            total_chks = checkboxes.count()
             
-            for d_key, d_text in day_names.items():
-                chk = page.locator(f"//label[contains(., '{d_text}')]//input[@type='checkbox']")
-                if chk.count() > 0:
-                    if d_key in selected_days:
+            for idx, day_name in enumerate(day_order):
+                if idx < total_chks:
+                    chk = checkboxes.nth(idx)
+                    if day_name in selected_days:
                         chk.check()
                     else:
                         chk.uncheck()
 
             logs.append("8. Kart bilgileri dolduruluyor...")
-            inputs = page.locator("input[type='text']")
-            text_inputs_count = inputs.count()
-            
-            if text_inputs_count >= 2:
-                inputs.nth(text_inputs_count - 2).fill(card_name)
-                inputs.nth(text_inputs_count - 1).fill(card_number)
-            
-            selects = page.locator("select")
-            if selects.count() >= 3:
-                selects.nth(1).select_option(value=exp_month.zfill(2))
-                selects.nth(2).select_option(value=exp_year)
+            name_input = page.locator("#KartSahibi, input[name*='KartSahibi'], input[name*='CardHolder']").first
+            if name_input.count() > 0:
+                name_input.fill(card_name)
+            else:
+                page.locator("input[type='text']").nth(-2).fill(card_name)
 
-            cvv_input = page.locator("input[type='password']")
-            if cvv_input.count() > 0:
-                cvv_input.last.fill(cvv)
+            num_input = page.locator("#KartNo, input[name*='KartNo'], input[name*='CardNumber']").first
+            if num_input.count() > 0:
+                num_input.fill(card_number)
+            else:
+                page.locator("input[type='text']").last.fill(card_number)
+
+            month_elem = page.locator("#ExpMonth, select[name*='ExpMonth']").first
+            if month_elem.count() > 0:
+                try:
+                    month_elem.select_option(value=exp_month.zfill(2))
+                except Exception:
+                    month_elem.select_option(label=exp_month.zfill(2))
+            else:
+                page.locator("select").nth(1).select_option(index=int(exp_month))
+
+            year_elem = page.locator("#ExpYear, select[name*='ExpYear']").first
+            if year_elem.count() > 0:
+                try:
+                    year_elem.select_option(value=str(exp_year))
+                except Exception:
+                    try:
+                        year_elem.select_option(label=str(exp_year))
+                    except Exception:
+                        year_elem.select_option(value=str(exp_year)[-2:])
+            else:
+                page.locator("select").nth(2).select_option(value=str(exp_year))
+
+            cvv_elem = page.locator("#Cvv2, #CVV, input[name*='Cvv'], input[type='password']").last
+            cvv_elem.fill(cvv)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
             page.locator("button:has-text('Yükle'), input[value='Yükle'], .btn:has-text('Yükle')").first.click()
             
-            page.wait_for_timeout(4000)
+            page.wait_for_timeout(6000)
 
-            logs.append("10. Islem tamamlandi, SMS dogrulama ekranina ulasildi.")
+            screenshot_bytes = page.screenshot(full_page=True)
+            screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+
+            logs.append("10. Odeme emri verildi. Banka/SMS ekran durumu asagidaki gibidir.")
             status = "success"
 
         except Exception as e:
