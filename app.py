@@ -230,24 +230,35 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
             logs.append("14. 'Devam Et' butonuna tiklandi! Mobil banka bildirimini telefonunuzdan hemen onaylayiniz...")
 
-            # انتظار قيامك بتأكيد العملية في هاتفك وعودة المتصفح لصفحة الجامعة
-            # مدة الفحص 15 ثانية (ضمن مهلة سيرفر ريندر الآمنة)
-            returned_to_system = False
+            # مراقبة التحويل بعد تأكيدك في التطبيق لمدة 15 ثانية
             for _ in range(15):
                 page.wait_for_timeout(1000)
-                if "isparta.edu.tr" in page.url and "vakifbank" not in page.url.lower():
-                    logs.append("15. Banka onayi algilandi! Universite sistemine basariyla donuldu.")
-                    status = "success"
-                    returned_to_system = True
-                    page.wait_for_timeout(2000)
+                
+                # فحص ما إذا ظهر زر إتمام العملية في البنك أو تم التحويل
+                try:
+                    target_scope.evaluate("""() => {
+                        const completeBtn = Array.from(document.querySelectorAll('button, input, a')).find(el => (el.innerText || el.value || '').includes('Tamamla') || (el.innerText || el.value || '').includes('Kapat'));
+                        if (completeBtn) completeBtn.click();
+                    }""")
+                except Exception:
+                    pass
+
+                body_text = page.inner_text("body").lower()
+                if "başarılı" in body_text or "tamamlandı" in body_text or ("isparta.edu.tr" in page.url and "vakifbank" not in page.url.lower()):
+                    logs.append("15. Banka onayi tamamlandi! Universite sistemine basariyla donuldu.")
                     break
 
-            if not returned_to_system:
-                logs.append("[BILGI] Sure sinirina ulasildi. Onay tamamlandiysa son durum asagidaki ekranda gosterilmektedir.")
-                status = "success"
+            # الانتقال لصفحة استعلام الفيشات للتأكد النهائي وعرض إيصال الحجز الفعلي
+            logs.append("16. Guncel yemek fisi durumu kontrol ediliyor...")
+            try:
+                page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=15000)
+                page.wait_for_timeout(1500)
+            except Exception:
+                pass
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+            status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
