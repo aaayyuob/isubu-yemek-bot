@@ -9,6 +9,8 @@
     body { background: #f4f6f9; margin: 0; padding: 15px; display: flex; justify-content: center; }
     .card { background: white; padding: 25px; border-radius: 14px; width: 100%; max-width: 480px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
     h2 { margin-top: 0; color: #1e3a8a; text-align: center; }
+    .calendar-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 11px; background: #ecfdf5; border: 1px solid #10b981; color: #047857; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: 600; margin-bottom: 18px; text-align: center; }
+    .calendar-btn:hover { background: #d1fae5; }
     h4 { margin: 18px 0 8px 0; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
     label { display: block; margin-top: 10px; font-weight: 600; font-size: 13px; color: #4b5563; }
     input[type="text"], input[type="password"], select { width: 100%; padding: 11px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; }
@@ -24,6 +26,11 @@
 <body>
   <div class="card">
     <h2>ISUBÜ Yemek Rezervasyonu</h2>
+    
+    <a href="/reminder.ics" class="calendar-btn">
+      📅 Pazartesi & Cuma 12:30 Hatırlatıcısını Takvime Ekle
+    </a>
+
     <form action="/book" method="POST">
       <h4>Kullanici Giris Bilgileri</h4>
       <label>E-posta</label>
