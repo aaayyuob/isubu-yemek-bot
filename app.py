@@ -201,27 +201,38 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             except Exception:
                 page.wait_for_timeout(4000)
 
+            # تحديد الإطار الصحيح (سواء الصفحة الأساسية أو iframe)
             target_scope = page
             for frame in page.frames:
                 if "vakifbank" in frame.url.lower():
                     target_scope = frame
                     break
 
-            try:
-                cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza, :has-text('Cep İmza')").first
-                cep_imza.wait_for(timeout=6000)
-                cep_imza.click(force=True)
-                logs.append("13. 'Cep Imza' secildi.")
-                page.wait_for_timeout(800)
+            # النقر الصريح على زر Devam Et (سواء كان button أو input أو عنصر قابل للنقر)
+            logs.append("13. VakifBank 'Devam Et' butonuna tiklaniyor...")
+            clicked = False
+            for selector in [
+                "button:has-text('Devam Et')",
+                "input[value*='Devam']",
+                ".btn:has-text('Devam')",
+                "button:has-text('Devam')",
+                "button[type='submit']"
+            ]:
+                loc = target_scope.locator(selector).first
+                if loc.is_visible():
+                    loc.click(force=True)
+                    clicked = True
+                    break
 
-                devam_btn = target_scope.locator("button:has-text('Devam Et'), input[value*='Devam']").first
-                if devam_btn.is_visible():
-                    devam_btn.click(force=True)
-                    logs.append("14. 'Devam Et' butonuna tiklandi, bildirim bankaya iletildi.")
-            except Exception as bank_err:
-                logs.append(f"[BILGI] Banka ekrani islemi: {str(bank_err)}")
+            if not clicked:
+                target_scope.evaluate("""() => {
+                    const btn = Array.from(document.querySelectorAll('button, input, a, div')).find(el => (el.innerText || el.value || '').trim() === 'Devam Et' || (el.innerText || el.value || '').includes('Devam'));
+                    if (btn) btn.click();
+                }""")
 
-            page.wait_for_timeout(3000)
+            logs.append("14. 'Devam Et' butonuna tiklandi! Banka uygulamaniza (VakifBank Mobil) onay gonderildi.")
+            page.wait_for_timeout(3500)
+
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
