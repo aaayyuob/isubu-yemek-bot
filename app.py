@@ -1,4 +1,5 @@
 import base64
+import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request
 from playwright.sync_api import sync_playwright
@@ -106,52 +107,62 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                         chk.uncheck()
 
             logs.append("8. Kart bilgileri dolduruluyor...")
-            name_input = page.locator("#KartSahibi, input[name*='KartSahibi'], input[name*='CardHolder']").first
-            if name_input.count() > 0:
-                name_input.fill(card_name)
-            else:
-                page.locator("input[type='text']").nth(-2).fill(card_name)
+            all_text_inputs = page.locator("input[type='text']")
+            count_texts = all_text_inputs.count()
+            if count_texts >= 2:
+                all_text_inputs.nth(count_texts - 2).fill(card_name)
+                all_text_inputs.nth(count_texts - 1).fill(card_number)
 
-            num_input = page.locator("#KartNo, input[name*='KartNo'], input[name*='CardNumber']").first
-            if num_input.count() > 0:
-                num_input.fill(card_number)
-            else:
-                page.locator("input[type='text']").last.fill(card_number)
-
-            month_elem = page.locator("#ExpMonth, select[name*='ExpMonth']").first
-            if month_elem.count() > 0:
+            all_selects = page.locator("select")
+            count_selects = all_selects.count()
+            if count_selects >= 3:
+                month_dropdown = all_selects.nth(1)
                 try:
-                    month_elem.select_option(value=exp_month.zfill(2))
+                    month_dropdown.select_option(value=exp_month.zfill(2))
                 except Exception:
-                    month_elem.select_option(label=exp_month.zfill(2))
-            else:
-                page.locator("select").nth(1).select_option(index=int(exp_month))
-
-            year_elem = page.locator("#ExpYear, select[name*='ExpYear']").first
-            if year_elem.count() > 0:
+                    month_dropdown.select_option(index=int(exp_month))
+                
+                year_dropdown = all_selects.nth(2)
                 try:
-                    year_elem.select_option(value=str(exp_year))
+                    year_dropdown.select_option(value=str(exp_year))
                 except Exception:
                     try:
-                        year_elem.select_option(label=str(exp_year))
+                        year_dropdown.select_option(label=str(exp_year))
                     except Exception:
-                        year_elem.select_option(value=str(exp_year)[-2:])
-            else:
-                page.locator("select").nth(2).select_option(value=str(exp_year))
+                        year_dropdown.select_option(value=str(exp_year)[-2:])
 
-            cvv_elem = page.locator("#Cvv2, #CVV, input[name*='Cvv'], input[type='password']").last
-            cvv_elem.fill(cvv)
+            all_pass_inputs = page.locator("input[type='password']")
+            if all_pass_inputs.count() > 0:
+                all_pass_inputs.last.fill(cvv)
 
             logs.append("9. Odeme onayi (Yukle butonu) tiklaniyor...")
+            current_url = page.url
             page.locator("button:has-text('Yükle'), input[value='Yükle'], .btn:has-text('Yükle')").first.click()
-            
-            page.wait_for_timeout(6000)
+
+            payment_completed = False
+            for _ in range(15):
+                page.wait_for_timeout(1000)
+                
+                if page.locator(".alert-danger, .validation-summary-errors, .field-validation-error").is_visible() or \
+                   page.get_by_text("Hata").is_visible() or \
+                   page.get_by_text("Geçersiz").is_visible() or \
+                   page.get_by_text("Başarısız").is_visible():
+                    logs.append("[HATA] Odeme bilgileri hatali veya banka islemi reddetti!")
+                    status = "error"
+                    payment_completed = True
+                    break
+                
+                if page.url != current_url or page.locator("iframe, text=SMS, text=Doğrulama, text=Onay").is_visible():
+                    logs.append("10. Odeme basarili sekilde tetiklendi, Banka 3D Secure / SMS onay ekranina yonlendirildi.")
+                    status = "success"
+                    payment_completed = True
+                    break
+
+            if not payment_completed:
+                logs.append("[BILGI] Islem tamamlandi, guncel durum asagidaki ekranda gosterilmektedir.")
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-
-            logs.append("10. Odeme emri verildi. Banka/SMS ekran durumu asagidaki gibidir.")
-            status = "success"
 
         except Exception as e:
             logs.append(f"[HATA OLUSTU] {str(e)}")
