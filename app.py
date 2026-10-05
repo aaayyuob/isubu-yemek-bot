@@ -176,24 +176,30 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             page.locator("#btnYukle, button:has-text('Yükle')").first.click(force=True)
             page.wait_for_timeout(1500)
 
-            logs.append("10. Onay penceresindeki 'Tamam' butonu onaylaniyor...")
+            logs.append("10. Onay penceresi (Tamam) dogrudan form gonderimi ile tetikleniyor...")
             page.evaluate("""() => {
-                const modal = document.querySelector('.modal.show, .modal.in, #confirm_modal, .modal');
-                if (modal) {
-                    const buttons = Array.from(modal.querySelectorAll('button, a'));
-                    const tamam = buttons.find(b => b.innerText.trim() === 'Tamam' || b.innerText.includes('Tamam'));
-                    if (tamam) {
-                        tamam.click();
-                        return;
-                    }
+                const confirmBtns = Array.from(document.querySelectorAll('.modal button, .bootbox button, button.btn-primary, button.btn-success'));
+                const tamam = confirmBtns.find(b => b.innerText.trim().includes('Tamam') || b.innerText.trim().includes('Evet'));
+                if (tamam) {
+                    tamam.click();
                 }
-                const allButtons = Array.from(document.querySelectorAll('button'));
-                const btn = allButtons.find(b => b.innerText.trim() === 'Tamam');
-                if (btn) btn.click();
+
+                setTimeout(() => {
+                    const form = document.querySelector('form[action*="Odeme"], form[action*="Yukle"], form');
+                    if (form && !window.submitted) {
+                        window.submitted = true;
+                        form.submit();
+                    }
+                }, 800);
             }""")
 
-            logs.append("11. VakifBank 3D Secure ekrani aciliyor...")
-            page.wait_for_timeout(3500)
+            logs.append("11. VakifBank 3D Secure sayfasina yonlendirme bekleniyor...")
+            
+            try:
+                page.wait_for_url(lambda u: "vakifbank" in u.lower() or "3d" in u.lower() or "pos" in u.lower(), timeout=18000)
+                logs.append("12. VakifBank sayfasina basariyla giris yapildi.")
+            except Exception:
+                page.wait_for_timeout(4000)
 
             target_scope = page
             for frame in page.frames:
@@ -201,20 +207,21 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     target_scope = frame
                     break
 
-            logs.append("12. 'Cep Imza' secenegi seciliyor...")
-            cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza").first
-            if cep_imza.is_visible(timeout=5000):
+            try:
+                cep_imza = target_scope.locator("text=Cep İmza, text=Cep Imza, :has-text('Cep İmza')").first
+                cep_imza.wait_for(timeout=6000)
                 cep_imza.click(force=True)
+                logs.append("13. 'Cep Imza' secildi.")
                 page.wait_for_timeout(800)
 
-                logs.append("13. 'Devam Et' butonu tiklaniyor...")
                 devam_btn = target_scope.locator("button:has-text('Devam Et'), input[value*='Devam']").first
                 if devam_btn.is_visible():
                     devam_btn.click(force=True)
+                    logs.append("14. 'Devam Et' butonuna tiklandi, bildirim bankaya iletildi.")
+            except Exception as bank_err:
+                logs.append(f"[BILGI] Banka ekrani islemi: {str(bank_err)}")
 
-            logs.append("14. VakifBank Mobil uygulamaniza onay bildirimi gonderildi! Lutfen telefonunuzdan onaylayiniz.")
             page.wait_for_timeout(3000)
-
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
