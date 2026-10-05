@@ -33,10 +33,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
                 "--disable-dev-shm-usage",
-                "--disable-gpu",
-                "--no-first-run",
-                "--no-zygote",
-                "--single-process"
+                "--disable-gpu"
             ]
         )
         context = browser.new_context(
@@ -115,9 +112,8 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
             page.evaluate("""
                 ({name, num, month, year, cvv}) => {
-                    const cardSection = Array.from(document.querySelectorAll('div, section')).find(el => el.innerText && el.innerText.includes('Kart Bilgileri'));
-                    const container = cardSection || document;
-                    const inputs = Array.from(container.querySelectorAll('input')).filter(i => i.type !== 'checkbox' && i.type !== 'hidden' && i.type !== 'button' && i.type !== 'submit');
+                    const cardBox = Array.from(document.querySelectorAll('div, section')).find(el => el.innerText && el.innerText.includes('Kart Bilgileri')) || document;
+                    const inputs = Array.from(cardBox.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="button"]):not([type="submit"])'));
 
                     if (inputs.length >= 1) {
                         inputs[0].value = name;
@@ -155,9 +151,9 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     }
 
                     if (inputs.length >= 3) {
-                        inputs[2].value = cvv;
-                        inputs[2].dispatchEvent(new Event('input', { bubbles: true }));
-                        inputs[2].dispatchEvent(new Event('change', { bubbles: true }));
+                        inputs[inputs.length - 1].value = cvv;
+                        inputs[inputs.length - 1].dispatchEvent(new Event('input', { bubbles: true }));
+                        inputs[inputs.length - 1].dispatchEvent(new Event('change', { bubbles: true }));
                     }
 
                     const btn = document.querySelector('#btnYukle');
@@ -182,21 +178,22 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
 
             logs.append("10. Onay penceresindeki 'Tamam' butonu onaylaniyor...")
             page.evaluate("""() => {
-                const modal = document.querySelector('.modal.show, .bootbox.modal, .modal[style*="display: block"]');
+                const modal = document.querySelector('.modal.show, .modal.in, #confirm_modal, .modal');
                 if (modal) {
-                    const btn = modal.querySelector('button.btn-primary, button[data-bb-handler="confirm"], button.btn-success');
-                    if (btn) {
-                        btn.click();
+                    const buttons = Array.from(modal.querySelectorAll('button, a'));
+                    const tamam = buttons.find(b => b.innerText.trim() === 'Tamam' || b.innerText.includes('Tamam'));
+                    if (tamam) {
+                        tamam.click();
                         return;
                     }
                 }
                 const allButtons = Array.from(document.querySelectorAll('button'));
-                const tamam = allButtons.find(b => b.innerText.trim() === 'Tamam');
-                if (tamam) tamam.click();
+                const btn = allButtons.find(b => b.innerText.trim() === 'Tamam');
+                if (btn) btn.click();
             }""")
 
             logs.append("11. VakifBank 3D Secure ekrani aciliyor...")
-            page.wait_for_timeout(4000)
+            page.wait_for_timeout(3500)
 
             target_scope = page
             for frame in page.frames:
@@ -215,7 +212,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 if devam_btn.is_visible():
                     devam_btn.click(force=True)
 
-            logs.append("14. VakifBank Mobil uygulamaniza onay gonderildi! Lutfen telefonunuzdan onaylayiniz.")
+            logs.append("14. VakifBank Mobil uygulamaniza onay bildirimi gonderildi! Lutfen telefonunuzdan onaylayiniz.")
             page.wait_for_timeout(3000)
 
             screenshot_bytes = page.screenshot(full_page=True)
