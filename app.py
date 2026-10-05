@@ -1,5 +1,4 @@
 import base64
-import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request
 from playwright.sync_api import sync_playwright
@@ -113,23 +112,33 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 all_text_inputs.nth(count_texts - 2).fill(card_name)
                 all_text_inputs.nth(count_texts - 1).fill(card_number)
 
-            all_selects = page.locator("select")
-            count_selects = all_selects.count()
-            if count_selects >= 3:
-                month_dropdown = all_selects.nth(1)
-                try:
-                    month_dropdown.select_option(value=exp_month.zfill(2))
-                except Exception:
-                    month_dropdown.select_option(index=int(exp_month))
-                
-                year_dropdown = all_selects.nth(2)
-                try:
-                    year_dropdown.select_option(value=str(exp_year))
-                except Exception:
-                    try:
-                        year_dropdown.select_option(label=str(exp_year))
-                    except Exception:
-                        year_dropdown.select_option(value=str(exp_year)[-2:])
+            formatted_month = exp_month.zfill(2)
+            formatted_year = str(exp_year).strip()
+            
+            page.evaluate("""
+                ({month, year}) => {
+                    const monthSelect = document.querySelector('#ExpMonth, select[name*="ExpMonth"], select:nth-of-type(2)');
+                    if (monthSelect) {
+                        for (let opt of monthSelect.options) {
+                            if (opt.value === month || opt.text === month || parseInt(opt.value) === parseInt(month)) {
+                                monthSelect.value = opt.value;
+                                monthSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                break;
+                            }
+                        }
+                    }
+                    const yearSelect = document.querySelector('#ExpYear, select[name*="ExpYear"], select:nth-of-type(3)');
+                    if (yearSelect) {
+                        for (let opt of yearSelect.options) {
+                            if (opt.value === year || opt.text === year || opt.value.endsWith(year.slice(-2)) || opt.text.endsWith(year.slice(-2))) {
+                                yearSelect.value = opt.value;
+                                yearSelect.dispatchEvent(new Event('change', { bubbles: true }));
+                                break;
+                            }
+                        }
+                    }
+                }
+            """, {"month": formatted_month, "year": formatted_year})
 
             all_pass_inputs = page.locator("input[type='password']")
             if all_pass_inputs.count() > 0:
