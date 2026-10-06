@@ -228,9 +228,9 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 }""")
 
             logs.append("14. 'Devam Et' tiklandi! Banka onay bildirimi gonderildi.")
-            logs.append("15. Odeme sayfasi goruntusu aninda alindi. Lutfen telefonunuzdan onaylayiniz!")
+            logs.append("15. Odeme sayfasi resmi hemen alindi. Lutfen telefonunuzdan onaylayiniz!")
 
-            # التقاط شاشة البنك الفورية بدون أي انتظار
+            # لقطة فورية بدون تأخير
             page.wait_for_timeout(2500)
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -347,7 +347,8 @@ END:VCALENDAR"""
 
 @app.route("/book", methods=["GET", "POST"])
 def book():
-    if request.method == "GET":
+    # في حال الدخول بالخطأ عبر رابط مباشر أو تحديث صفحة النتيجة السابقة، يرجعه للرئيسية فوراً
+    if request.method == "GET" or not request.form.get("email"):
         return redirect(url_for("index"))
 
     email = request.form.get("email")
@@ -380,6 +381,9 @@ def book():
 def check_status():
     email = request.form.get("email")
     password = request.form.get("password")
+    if not email or not password:
+        return redirect(url_for("index"))
+        
     logs, screenshot, status = query_fishes(email, password)
     return render_template(
         "result.html",
