@@ -1,4 +1,5 @@
 import base64
+import re
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response, redirect, url_for
 from playwright.sync_api import sync_playwright
@@ -18,6 +19,14 @@ def get_next_week_dates():
         "Cuma": (monday + timedelta(days=4)).strftime("%d.%m.%Y")
     }
     return dates_map
+
+def clean_student_email(raw_input):
+    cleaned = raw_input.strip().lower()
+    # استخراج الأرقام فقط من الإدخال
+    digits = re.sub(r"\D", "", cleaned)
+    if digits:
+        return f"l{digits}@isparta.edu.tr"
+    return cleaned
 
 def run_automation(email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days):
     logs = []
@@ -55,10 +64,14 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             page.get_by_placeholder("Parola").fill(password)
             page.get_by_role("button", name="Giriş").click()
             
-            page.wait_for_timeout(2500)
+            # الانتظار حتى مغادرة صفحة تسجيل الدخول تماماً
+            try:
+                page.wait_for_url(lambda u: "kimlik" not in u.lower(), timeout=12000)
+            except Exception:
+                page.wait_for_timeout(3000)
 
-            if "Kimlik/Giris" in page.url:
-                logs.append("[HATA] Giris basarisiz! E-posta veya parola hatali.")
+            if "kimlik" in page.url.lower():
+                logs.append("[HATA] Giris basarisiz! Ogrenci numarasi veya OBS parolasi hatali.")
                 status = "error"
                 screenshot_bytes = page.screenshot(full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -81,7 +94,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             else:
                 btn = page.get_by_role("link", name="Satın Al").nth(1)
 
-            btn.wait_for(timeout=8000)
+            btn.wait_for(timeout=10000)
             btn.click()
             page.wait_for_load_state("domcontentloaded")
             page.wait_for_timeout(1500)
@@ -281,18 +294,8 @@ def query_fishes(email, password):
             page.wait_for_timeout(2500)
 
             logs.append("Menuden 'Fiş Alış Sorgulama' sayfasina gidiliyor...")
-            # الانتقال عبر الرابط الصريح مع الانتظار السليم للشبكة
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="networkidle", timeout=30000)
             page.wait_for_timeout(2000)
-
-            # إذا لم يتم تحميل الصفحة، استخدام القائمة الجانبية كما في الصورة
-            if not page.locator("button:has-text('Görüntüle')").is_visible():
-                page.evaluate("""() => {
-                    const links = Array.from(document.querySelectorAll('a, span'));
-                    const target = links.find(l => l.innerText && l.innerText.includes('Fiş Alış Sorgulama'));
-                    if (target) target.click();
-                }""")
-                page.wait_for_timeout(2000)
 
             logs.append("'Goruntule' butonuna tiklaniyor...")
             view_btn = page.locator("button:has-text('Görüntüle'), button:has-text('Goruntule'), .btn-primary:has-text('Görüntüle')").first
@@ -305,8 +308,7 @@ def query_fishes(email, password):
                     if (b) b.click();
                 }""")
 
-            # الانتظار حتى استقرار محتوى الجدول وظهور البيانات بالكامل
-            page.wait_for_timeout(3500)
+            page.wait_for_timeout(3000)
             logs.append("Fiş hareketleri tablosu basariyla goruntulendi.")
 
             screenshot_bytes = page.screenshot(full_page=True)
@@ -367,12 +369,15 @@ END:VCALENDAR"""
 
 @app.route("/book", methods=["GET", "POST"])
 def book():
-    if request.method == "GET" or not request.form.get("student_id"):
+    if request.method == "GET":
         return redirect(url_for("index"))
 
-    student_id = request.form.get("student_id", "").strip()
-    email = f"l{student_id}@isparta.edu.tr"
-    
+    student_input = request.form.get("student_id") or request.form.get("email") or ""
+    if not student_input:
+        return redirect(url_for("index"))
+
+    # استخراج وتجهيز الإيميل الصحيح دائماً
+    email = clean_student_email(student_input)
     password = request.form.get("password")
     card_name = request.form.get("card_name")
     card_number = request.form.get("card_number")
@@ -387,6 +392,9 @@ def book():
         email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
     )
     
+    # العداد يظهر فقط في حال نجاح الوصول لشاشة البنك
+    show_verify = (status == "success")
+
     return render_template(
         "result.html",
         logs=logs,
@@ -395,7 +403,7 @@ def book():
         selected_days=selected_days,
         email=email,
         password=password,
-        show_verify=True
+        show_verify=show_verify
     )
 
 @app.route("/check_status", methods=["POST"])
