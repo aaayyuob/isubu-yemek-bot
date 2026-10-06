@@ -21,13 +21,6 @@ def get_next_week_dates():
     }
     return dates_map
 
-def clean_student_email(raw_input):
-    cleaned = raw_input.strip().lower()
-    digits = re.sub(r"\D", "", cleaned)
-    if digits:
-        return f"l{digits}@isparta.edu.tr"
-    return cleaned
-
 def run_automation(email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days):
     logs = []
     screenshot_b64 = None
@@ -67,12 +60,12 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             try:
                 page.wait_for_url(lambda u: "kimlik" not in u.lower(), timeout=12000)
             except Exception:
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(2500)
 
             if "kimlik" in page.url.lower():
                 logs.append("[HATA] Giris basarisiz! Ogrenci numarasi veya OBS parolasi hatali.")
                 status = "error"
-                screenshot_bytes = page.screenshot(type="jpeg", quality=75)
+                screenshot_bytes = page.screenshot()
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
                 return logs, screenshot_b64, status
 
@@ -83,7 +76,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             if page.get_by_text("Üzgünüz").is_visible() or page.get_by_text("kapalı").is_visible():
                 logs.append("[BILGI] Sistem su anda satis saatleri disindadir / Satis kapali.")
                 status = "warning"
-                screenshot_bytes = page.screenshot(type="jpeg", quality=75)
+                screenshot_bytes = page.screenshot()
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
                 return logs, screenshot_b64, status
 
@@ -240,48 +233,78 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 }""")
 
             logs.append("14. 'Devam Et' tiklandi! Bildirim telefonunuza gonderildi.")
-            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Tarayici oturumu canli tutuluyor)...")
+            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Banka onayi bekleniyor)...")
 
-            # الحفاظ على الجلسة حية ومراقبة إتمام الدفع (لمدة تصل إلى 65 ثانية)
-            payment_completed = False
-            start_wait = time.time()
+            confirmed = False
+            start_t = time.time()
             
-            while time.time() - start_wait < 65:
-                page.wait_for_timeout(2000)
-                current_url = page.url.lower()
+            while time.time() - start_t < 50:
+                page.wait_for_timeout(1500)
+                
+                try:
+                    content = page.content().lower()
+                except Exception:
+                    content = ""
 
-                # إذا عاد المتصفح إلى موقع الجامعة بعد الموافقة البنكية
-                if "isparta.edu.tr" in current_url and "vakifbank" not in current_url:
-                    logs.append("16. Tebrikler! Banka onayi basariyla alindi ve universite sistemine donuldu.")
-                    payment_completed = True
-                    page.wait_for_timeout(2500)
+                if "isparta.edu.tr" in page.url.lower() and "vakifbank" not in page.url.lower() and "seans" not in page.url.lower():
+                    logs.append("16. Banka islemi onaylandi ve universite sistemine donuldu!")
+                    confirmed = True
                     break
 
-            if not payment_completed:
-                logs.append("[BILGI] Onay suresi icerisinde islem tamamlanamadi veya banka ekraninda kalindi.")
+                if "başarılı" in content or "tamamlandı" in content or "tahsil" in content:
+                    logs.append("16. Odeme islemi basarili olarak teyit edildi!")
+                    confirmed = True
+                    break
 
-            # الآن يتم فتح صفحة استعلام الفيشات بنفس جلسة تسجيل الدخول النشطة تماماً
-            logs.append("17. 'Fiş Alış Sorgulama' sayfasinda satin alinan yemekler teyit ediliyor...")
-            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=20000)
-            page.wait_for_timeout(1500)
+                try:
+                    target_scope.evaluate("""() => {
+                        const finishBtn = Array.from(document.querySelectorAll('button, input, a')).find(el => (el.innerText || el.value || '').includes('Tamam') || (el.innerText || el.value || '').includes('Kapat') || (el.innerText || el.value || '').includes('Devam'));
+                        if (finishBtn) finishBtn.click();
+                    }""")
+                except Exception:
+                    pass
 
-            # النقر على زر Görüntüle
+            # 17. الانتقال مباشرة إلى صفحة Fiş Alış Sorgulama
+            logs.append("17. 'Fiş Alış Sorgulama' sayfasina geciliyor...")
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
+            page.wait_for_timeout(2000)
+
+            # 18. النقر الصريح على الزر الحقيقي #btnGoruntule
+            logs.append("18. '#btnGoruntule' butonuna tiklanarak fiş tablosu sorgulaniyor...")
             page.evaluate("""() => {
                 const btn = document.querySelector('#btnGoruntule');
-                if (btn) btn.click();
-                else if (typeof Goruntule === 'function') Goruntule();
+                if (btn) {
+                    btn.click();
+                } else if (typeof Goruntule === 'function') {
+                    Goruntule();
+                }
             }""")
-            
-            page.wait_for_timeout(3000)
 
-            # التمرير إلى جدول الفيشات المؤكدة
+            # الانتظار الكافي لجلب استجابة الـ AJAX الخاصة بالجدول
+            page.wait_for_timeout(4000)
+
+            # 19. التمرير الدقيق لجدول الفيشات والتقاطه مباشرة
+            logs.append("19. Onaylanan fiş tablosunun ekran resmi aliniyor...")
+            
+            # التمرير إلى منتصف لوحة الفيشات
             page.evaluate("""() => {
                 const tbl = document.querySelector('.panel-purple, #divHareketler, table');
-                if (tbl) tbl.scrollIntoView({ behavior: 'instant', block: 'center' });
+                if (tbl) {
+                    tbl.scrollIntoView({ behavior: 'instant', block: 'center' });
+                }
             }""")
             page.wait_for_timeout(1000)
 
-            screenshot_bytes = page.screenshot(type="jpeg", quality=80)
+            # محاولة التقاط الحاوية المحددة للجدول، وإذا تعذر ذلك يتم التقاط الشاشة كاملة
+            try:
+                table_loc = page.locator(".panel-purple, #divHareketler").first
+                if table_loc.is_visible():
+                    screenshot_bytes = table_loc.screenshot()
+                else:
+                    screenshot_bytes = page.screenshot(full_page=True)
+            except Exception:
+                screenshot_bytes = page.screenshot(full_page=True)
+
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
 
@@ -289,7 +312,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             logs.append(f"[HATA OLUSTU] {str(e)}")
             status = "error"
             try:
-                screenshot_bytes = page.screenshot(type="jpeg", quality=70)
+                screenshot_bytes = page.screenshot(full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             except Exception:
                 pass
@@ -342,11 +365,14 @@ def book():
     if request.method == "GET":
         return redirect(url_for("index"))
 
-    student_input = request.form.get("student_id") or request.form.get("email") or ""
-    if not student_input:
+    # استلام البادئة المختارة (l أو yl أو d) مع أرقام الطالب
+    prefix = request.form.get("prefix", "l").strip().lower()
+    raw_digits = re.sub(r"\D", "", request.form.get("student_id", "").strip())
+    
+    if not raw_digits:
         return redirect(url_for("index"))
 
-    email = clean_student_email(student_input)
+    email = f"{prefix}{raw_digits}@isparta.edu.tr"
     password = request.form.get("password")
     card_name = request.form.get("card_name")
     card_number = request.form.get("card_number")
