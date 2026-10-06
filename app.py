@@ -1,4 +1,5 @@
 import base64
+import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response, redirect, url_for
 from playwright.sync_api import sync_playwright
@@ -229,32 +230,31 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 }""")
 
             logs.append("14. 'Devam Et' butonuna tiklandi! Mobil banka bildirimini telefonunuzdan hemen onaylayiniz...")
+            logs.append("15. Onayiniz icin sayfa 90 saniye (1.5 dakika) bekliyor...")
+            
+            # الانتظار لمدة 90 ثانية في صفحة البنك لتأكيد العملية في تطبيق هاتفك
+            page.wait_for_timeout(90000)
 
-            # مراقبة التحويل بعد تأكيدك في التطبيق لمدة 15 ثانية
-            for _ in range(15):
-                page.wait_for_timeout(1000)
-                
-                # فحص ما إذا ظهر زر إتمام العملية في البنك أو تم التحويل
-                try:
-                    target_scope.evaluate("""() => {
-                        const completeBtn = Array.from(document.querySelectorAll('button, input, a')).find(el => (el.innerText || el.value || '').includes('Tamamla') || (el.innerText || el.value || '').includes('Kapat'));
-                        if (completeBtn) completeBtn.click();
-                    }""")
-                except Exception:
-                    pass
+            # التوجه مباشرة إلى صفحة Fiş Alış Sorgulama
+            logs.append("16. 'Fiş Alış Sorgulama' sayfasina gidiliyor...")
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
+            page.wait_for_timeout(1500)
 
-                body_text = page.inner_text("body").lower()
-                if "başarılı" in body_text or "tamamlandı" in body_text or ("isparta.edu.tr" in page.url and "vakifbank" not in page.url.lower()):
-                    logs.append("15. Banka onayi tamamlandi! Universite sistemine basariyla donuldu.")
-                    break
+            # الضغط مباشرة على زر Görüntüle الأزرق دون تغيير التواريخ
+            logs.append("17. 'Goruntule' butonuna tiklanarak odeme ve fis islemleri sorgulaniyor...")
+            view_btn = page.locator("button:has-text('Görüntüle'), button:has-text('Goruntule'), .btn-primary:has-text('Görüntüle')").first
+            if view_btn.is_visible():
+                view_btn.click(force=True)
+            else:
+                page.evaluate("""() => {
+                    const btns = Array.from(document.querySelectorAll('button, a'));
+                    const b = btns.find(el => el.innerText && el.innerText.includes('Görüntüle'));
+                    if (b) b.click();
+                }""")
 
-            # الانتقال لصفحة استعلام الفيشات للتأكد النهائي وعرض إيصال الحجز الفعلي
-            logs.append("16. Guncel yemek fisi durumu kontrol ediliyor...")
-            try:
-                page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=15000)
-                page.wait_for_timeout(1500)
-            except Exception:
-                pass
+            # انتظار ثوانٍ حتى تنتهي استجابة الجدول ويتم عرض العمليات
+            page.wait_for_timeout(2500)
+            logs.append("18. Fiş hareketleri tablosu goruntulendi ve ekran resmi alindi.")
 
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
