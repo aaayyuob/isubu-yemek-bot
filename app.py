@@ -1,5 +1,4 @@
 import base64
-import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response, redirect, url_for
 from playwright.sync_api import sync_playwright
@@ -177,7 +176,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             page.locator("#btnYukle, button:has-text('Yükle')").first.click(force=True)
             page.wait_for_timeout(1500)
 
-            logs.append("10. Onay penceresi (Tamam) dogrudan form gonderimi ile tetikleniyor...")
+            logs.append("10. Onay penceresi (Tamam) tetikleniyor...")
             page.evaluate("""() => {
                 const confirmBtns = Array.from(document.querySelectorAll('.modal button, .bootbox button, button.btn-primary, button.btn-success'));
                 const tamam = confirmBtns.find(b => b.innerText.trim().includes('Tamam') || b.innerText.trim().includes('Evet'));
@@ -195,12 +194,11 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             }""")
 
             logs.append("11. VakifBank 3D Secure sayfasina yonlendirme bekleniyor...")
-            
             try:
                 page.wait_for_url(lambda u: "vakifbank" in u.lower() or "3d" in u.lower() or "pos" in u.lower(), timeout=18000)
                 logs.append("12. VakifBank sayfasina basariyla giris yapildi.")
             except Exception:
-                page.wait_for_timeout(4000)
+                page.wait_for_timeout(3500)
 
             target_scope = page
             for frame in page.frames:
@@ -229,19 +227,56 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     if (btn) btn.click();
                 }""")
 
-            logs.append("14. 'Devam Et' butonuna tiklandi! Mobil banka bildirimini telefonunuzdan hemen onaylayiniz...")
-            logs.append("15. Onayiniz icin sayfa 90 saniye (1.5 dakika) bekliyor...")
-            
-            # الانتظار لمدة 90 ثانية في صفحة البنك لتأكيد العملية في تطبيق هاتفك
-            page.wait_for_timeout(90000)
+            logs.append("14. 'Devam Et' tiklandi! Banka onay bildirimi gonderildi.")
+            logs.append("15. Odeme sayfasi goruntusu aninda alindi. Lutfen telefonunuzdan onaylayiniz!")
 
-            # التوجه مباشرة إلى صفحة Fiş Alış Sorgulama
-            logs.append("16. 'Fiş Alış Sorgulama' sayfasina gidiliyor...")
+            # التقاط شاشة البنك الفورية بدون أي انتظار
+            page.wait_for_timeout(2500)
+            screenshot_bytes = page.screenshot(full_page=True)
+            screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+            status = "success"
+
+        except Exception as e:
+            logs.append(f"[HATA OLUSTU] {str(e)}")
+            status = "error"
+            try:
+                screenshot_bytes = page.screenshot(full_page=True)
+                screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
+            except Exception:
+                pass
+        finally:
+            context.close()
+            browser.close()
+
+    return logs, screenshot_b64, status
+
+def query_fishes(email, password):
+    logs = ["Fiş sorgulama islemi baslatildi..."]
+    screenshot_b64 = None
+    status = "info"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+        )
+        context = browser.new_context(viewport={"width": 1280, "height": 950})
+        page = context.new_page()
+
+        try:
+            page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=25000)
+            page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
+            page.get_by_placeholder("E-posta").wait_for(timeout=15000)
+            page.get_by_placeholder("E-posta").fill(email)
+            page.get_by_placeholder("Parola").fill(password)
+            page.get_by_role("button", name="Giriş").click()
+            page.wait_for_timeout(2500)
+
+            logs.append("Fiş Alış Sorgulama sayfasina gidiliyor...")
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
             page.wait_for_timeout(1500)
 
-            # الضغط مباشرة على زر Görüntüle الأزرق دون تغيير التواريخ
-            logs.append("17. 'Goruntule' butonuna tiklanarak odeme ve fis islemleri sorgulaniyor...")
+            logs.append("'Goruntule' butonuna tiklanarak kayitlar getiriliyor...")
             view_btn = page.locator("button:has-text('Görüntüle'), button:has-text('Goruntule'), .btn-primary:has-text('Görüntüle')").first
             if view_btn.is_visible():
                 view_btn.click(force=True)
@@ -252,16 +287,14 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     if (b) b.click();
                 }""")
 
-            # انتظار ثوانٍ حتى تنتهي استجابة الجدول ويتم عرض العمليات
-            page.wait_for_timeout(2500)
-            logs.append("18. Fiş hareketleri tablosu goruntulendi ve ekran resmi alindi.")
-
+            page.wait_for_timeout(2000)
+            logs.append("Guncel fis listesi tablosu alindi.")
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
 
         except Exception as e:
-            logs.append(f"[HATA OLUSTU] {str(e)}")
+            logs.append(f"[HATA] {str(e)}")
             status = "error"
             try:
                 screenshot_bytes = page.screenshot(full_page=True)
@@ -337,7 +370,23 @@ def book():
         logs=logs,
         screenshot=screenshot,
         status=status,
-        selected_days=selected_days
+        selected_days=selected_days,
+        email=email,
+        password=password,
+        show_verify=True
+    )
+
+@app.route("/check_status", methods=["POST"])
+def check_status():
+    email = request.form.get("email")
+    password = request.form.get("password")
+    logs, screenshot, status = query_fishes(email, password)
+    return render_template(
+        "result.html",
+        logs=logs,
+        screenshot=screenshot,
+        status=status,
+        show_verify=False
     )
 
 @app.errorhandler(404)
