@@ -12,7 +12,7 @@
     label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #374151; }
     input[type="text"], input[type="password"], select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
     
-    /* تصميم حقل البريد التلقائي */
+    /* تصميم حقل البريد مع قائمة البادئة */
     .email-input-group {
       display: flex;
       align-items: center;
@@ -21,13 +21,17 @@
       overflow: hidden;
       background: white;
     }
-    .email-prefix {
-      padding: 10px 8px 10px 12px;
-      background: #f9fafb;
+    .email-prefix-select {
+      width: auto !important;
+      padding: 10px 8px 10px 10px !important;
+      background: #f9fafb !important;
+      border: none !important;
+      border-right: 1px solid #e5e7eb !important;
+      border-radius: 0 !important;
       font-weight: bold;
       color: #1f2937;
-      border-right: 1px solid #e5e7eb;
-      user-select: none;
+      cursor: pointer;
+      outline: none;
     }
     .email-suffix {
       padding: 10px 12px;
@@ -36,6 +40,7 @@
       border-left: 1px solid #e5e7eb;
       font-size: 13px;
       user-select: none;
+      white-space: nowrap;
     }
     .email-input-group input {
       border: none;
@@ -65,8 +70,12 @@
       <div class="form-group">
         <label>Öğrenci Numarası (E-posta)</label>
         <div class="email-input-group">
-          <span class="email-prefix">l</span>
-          <input type="text" name="student_id" placeholder="2212705335" pattern="[0-9]+" inputmode="numeric" required autofocus>
+          <select name="prefix" class="email-prefix-select">
+            <option value="l" selected>l</option>
+            <option value="yl">yl</option>
+            <option value="d">d</option>
+          </select>
+          <input type="text" name="student_id" placeholder="2300000000" pattern="[0-9]+" inputmode="numeric" required autofocus>
           <span class="email-suffix">@isparta.edu.tr</span>
         </div>
       </div>
