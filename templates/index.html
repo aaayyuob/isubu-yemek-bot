@@ -3,72 +3,113 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>İşlem Sonucu | ISUBÜ Yemek</title>
+  <title>ISUBÜ Yemek Rezervasyon Otomasyonu</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
-    .card { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    h2 { margin-top: 0; color: #166534; font-size: 20px; }
-    .log-box { background: #111827; color: #10b981; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 13px; margin: 16px 0; max-height: 180px; overflow-y: auto; line-height: 1.6; }
-    .screenshot { width: 100%; border: 1px solid #e5e7eb; border-radius: 10px; margin-top: 10px; }
-    .timer-card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center; }
-    .timer-card h3 { margin: 0 0 8px 0; color: #1e40af; font-size: 16px; }
-    .timer-val { font-size: 24px; font-weight: bold; color: #1d4ed8; }
-    .btn { display: block; width: 100%; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: none; box-sizing: border-box; }
-    .btn-green { background: #16a34a; color: white; margin-top: 10px; }
-    .btn-blue { background: #2563eb; color: white; margin-top: 15px; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f3f4f6; margin: 0; padding: 16px; color: #1f2937; }
+    .container { max-width: 500px; margin: 0 auto; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+    h2 { margin-top: 0; color: #1e3a8a; font-size: 20px; text-align: center; }
+    .form-group { margin-bottom: 14px; }
+    label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 6px; color: #374151; }
+    input[type="text"], input[type="email"], input[type="password"], select { width: 100%; padding: 10px 12px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+    .days-box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+    .day-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; font-size: 13px; }
+    .day-item:last-child { margin-bottom: 0; }
+    .day-item input { transform: scale(1.2); }
+    .btn-submit { width: 100%; background: #2563eb; color: white; border: none; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 16px; }
+    .btn-submit:disabled { background: #9ca3af; cursor: not-allowed; }
+    .reminder-link { display: block; text-align: center; margin-top: 14px; font-size: 13px; color: #4b5563; text-decoration: none; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h2>İşlem Durumu Raporu</h2>
-    
-    <div class="log-box">
-      {% for log in logs %}
-        <div>{{ log }}</div>
-      {% endfor %}
-    </div>
-
-    {% if show_verify %}
-    <div class="timer-card">
-      <h3>Banka Onayı Bekleniyor</h3>
-      <p style="margin:0 0 10px 0; font-size:13px; color:#4b5563;">VakıfBank uygulamanızdan işlemi onaylayınız. Sistem otomatik olarak fişlerinizi sorgulayacaktır:</p>
-      <div class="timer-val" id="countdown">90 saniye</div>
+  <div class="container">
+    <h2>ISUBÜ Yemek Rezervasyonu</h2>
+    <form action="/book" method="POST" id="bookingForm">
       
-      <form id="checkForm" action="/check_status" method="POST">
-        <input type="hidden" name="email" value="{{ email }}">
-        <input type="hidden" name="password" value="{{ password }}">
-        <button type="submit" class="btn btn-green">Şimdi Fişleri Kontrol Et (Sorgula)</button>
-      </form>
-    </div>
-    {% endif %}
+      <div class="form-group">
+        <label>Öğrenci E-posta</label>
+        <input type="email" name="email" placeholder="l...05335@isparta.edu.tr" required>
+      </div>
 
-    <h3 style="margin-bottom:6px;">Sistem Ekranı Görüntüsü:</h3>
-    {% if screenshot %}
-      <img src="data:image/png;base64,{{ screenshot }}" class="screenshot" alt="Ekran Resmi">
-    {% else %}
-      <p style="color:#ef4444;">Görüntü alınamadı.</p>
-    {% endif %}
+      <div class="form-group">
+        <label>OBS Parolası</label>
+        <input type="password" name="password" placeholder="Parola" required>
+      </div>
 
-    <a href="/" class="btn btn-blue">Geri Dön</a>
+      <div class="grid-2 form-group">
+        <div>
+          <label>Öğün Seansı</label>
+          <select name="seans">
+            <option value="Ogle" selected>Öğle Yemeği</option>
+            <option value="Aksam">Akşam Yemeği</option>
+          </select>
+        </div>
+        <div>
+          <label>Yemekhane</label>
+          <select name="yemekhane">
+            <option value="100.Yıl Yerleşkesi" selected>100.Yıl Yerleşkesi</option>
+            <option value="Merkez Yerleşkesi">Merkez Yerleşkesi</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Yemek Alınacak Günler</label>
+        <div class="days-box">
+          <div class="day-item"><span>Pazartesi ({{ dates['Pazartesi'] }})</span><input type="checkbox" name="days" value="Pazartesi" checked></div>
+          <div class="day-item"><span>Salı ({{ dates['Sali'] }})</span><input type="checkbox" name="days" value="Sali" checked></div>
+          <div class="day-item"><span>Çarşamba ({{ dates['Carsamba'] }})</span><input type="checkbox" name="days" value="Carsamba"></div>
+          <div class="day-item"><span>Perşembe ({{ dates['Persembe'] }})</span><input type="checkbox" name="days" value="Persembe"></div>
+          <div class="day-item"><span>Cuma ({{ dates['Cuma'] }})</span><input type="checkbox" name="days" value="Cuma" checked></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>Kart Sahibi Ad Soyad</label>
+        <input type="text" name="card_name" placeholder="Kart Üzerindeki İsim" required>
+      </div>
+
+      <div class="form-group">
+        <label>Kart Numarası</label>
+        <input type="text" name="card_number" maxlength="19" placeholder="xxxx xxxx xxxx xxxx" required>
+      </div>
+
+      <div class="grid-3 form-group">
+        <div>
+          <label>Ay</label>
+          <select name="exp_month">
+            {% for m in range(1, 13) %}
+              <option value="{{ '%02d' % m }}">{{ '%02d' % m }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Yıl</label>
+          <select name="exp_year">
+            {% for y in range(2026, 2036) %}
+              <option value="{{ y }}">{{ y }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>CVV</label>
+          <input type="text" name="cvv" maxlength="3" placeholder="123" required>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-submit" id="submitBtn">Sisteme Bağlan ve Satın Al</button>
+    </form>
+    
+    <a href="/reminder.ics" class="reminder-link">📅 Takvime Hatırlatıcı Ekle (.ics)</a>
   </div>
 
-  {% if show_verify %}
   <script>
-    let timeLeft = 90;
-    const countEl = document.getElementById('countdown');
-    const form = document.getElementById('checkForm');
-    
-    const interval = setInterval(() => {
-      timeLeft--;
-      if (timeLeft <= 0) {
-        clearInterval(interval);
-        countEl.innerText = "Sorgulanıyor...";
-        form.submit();
-      } else {
-        countEl.innerText = timeLeft + " saniye";
-      }
-    }, 1000);
+    document.getElementById('bookingForm').addEventListener('submit', function() {
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+      btn.innerText = 'İşlem Başlatılıyor... Lütfen Bekleyiniz';
+    });
   </script>
-  {% endif %}
 </body>
 </html>
