@@ -295,32 +295,36 @@ def query_fishes(email, password):
             except Exception:
                 page.wait_for_timeout(3000)
 
-            logs.append("2. Sol menuden 'Fiş Alış Sorgulama' sayfasina gidiliyor...")
-            # الانتقال عبر الرابط المباشر مع انتظار استقرار الصفحة
+            logs.append("2. 'Fiş Alış Sorgulama' sayfasina geciliyor...")
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
             page.wait_for_timeout(2000)
 
-            logs.append("3. 'Görüntüle' butonu araniyor ve tiklaniyor...")
-            # محدد دقيق لزر Görüntüle الأزرق
-            view_btn = page.locator("button:has-text('Görüntüle'), button:has-text('Goruntule'), .btn-primary:has-text('Görüntüle'), a:has-text('Görüntüle')").first
-            view_btn.wait_for(timeout=10000)
-            view_btn.click(force=True)
+            logs.append("3. '#btnGoruntule' butonuna tiklaniyor ve Goruntule() cagriliyor...")
+            # استهداف مباشر للمعرف #btnGoruntule والدالة onclick="Goruntule()"
+            btn_clicked = False
+            try:
+                goruntule_btn = page.locator("#btnGoruntule")
+                if goruntule_btn.is_visible(timeout=5000):
+                    goruntule_btn.click(force=True)
+                    btn_clicked = True
+            except Exception:
+                pass
+
+            if not btn_clicked:
+                page.evaluate("""() => {
+                    const btn = document.querySelector('#btnGoruntule');
+                    if (btn) {
+                        btn.click();
+                    } else if (typeof Goruntule === 'function') {
+                        Goruntule();
+                    }
+                }""")
 
             logs.append("4. Fiş hareketleri tablosu verileri bekleniyor...")
-            # الانتظار حتى اكتمال جلب البيانات وظهور الحاوية
-            page.wait_for_timeout(3500)
+            page.wait_for_timeout(4000)
 
-            # إجبار الصفحة على خلفية بيضاء حتى لا تظهر شفافة أو بيضاء بالخطأ
-            page.evaluate("""() => {
-                document.body.style.background = '#ffffff';
-                const main = document.querySelector('.content, .main-content, .card, body');
-                if (main) main.scrollIntoView();
-            }""")
-
-            logs.append("5. Guncel fiş tablosu goruntulendi.")
-            
-            # التقاط شاشة واضحة ومحددة بدون full_page لتفادي عيوب الشفافية
-            screenshot_bytes = page.screenshot()
+            logs.append("5. Fiş tablosu ekrani basariyla alindi.")
+            screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
 
@@ -328,7 +332,7 @@ def query_fishes(email, password):
             logs.append(f"[HATA] {str(e)}")
             status = "error"
             try:
-                screenshot_bytes = page.screenshot()
+                screenshot_bytes = page.screenshot(full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             except Exception:
                 pass
