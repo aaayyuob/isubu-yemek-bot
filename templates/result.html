@@ -6,20 +6,17 @@
   <title>İşlem Durumu | ISUBÜ Yemek</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f3f4f6; margin: 0; padding: 16px; color: #1f2937; }
-    .card { max-width: 550px; margin: 0 auto; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    h2 { margin-top: 0; color: #166534; font-size: 19px; }
-    .log-box { background: #111827; color: #10b981; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 12px; margin: 14px 0; max-height: 180px; overflow-y: auto; line-height: 1.5; }
-    .screenshot { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 10px; }
-    .timer-card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 14px; margin: 16px 0; text-align: center; }
-    .timer-val { font-size: 22px; font-weight: bold; color: #1d4ed8; margin: 8px 0; }
+    .card { max-width: 650px; margin: 0 auto; background: white; border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; color: #166534; font-size: 20px; }
+    .log-box { background: #111827; color: #10b981; padding: 12px; border-radius: 8px; font-family: monospace; font-size: 12px; margin: 14px 0; max-height: 200px; overflow-y: auto; line-height: 1.6; }
+    .screenshot { width: 100%; border: 1px solid #d1d5db; border-radius: 8px; margin-top: 10px; display: block; }
     .btn { display: block; width: 100%; padding: 12px; border-radius: 8px; font-size: 15px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: none; box-sizing: border-box; }
-    .btn-green { background: #16a34a; color: white; margin-top: 8px; }
-    .btn-blue { background: #2563eb; color: white; margin-top: 12px; }
+    .btn-blue { background: #2563eb; color: white; margin-top: 14px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>İşlem Durumu Raporu</h2>
+    <h2>İşlem Durumu ve Fiş Raporu</h2>
     
     <div class="log-box">
       {% for log in logs %}
@@ -27,47 +24,14 @@
       {% endfor %}
     </div>
 
-    {% if show_verify %}
-    <div class="timer-card">
-      <h3 style="margin:0; font-size:15px; color:#1e40af;">Banka Onayı Bekleniyor</h3>
-      <p style="margin:4px 0; font-size:12px; color:#4b5563;">VakıfBank uygulamanızdan işlemi onaylayınız. Sistem otomatik olarak fişlerinizi sorgulayacaktır:</p>
-      <div class="timer-val" id="countdown">90 saniye</div>
-      
-      <form id="checkForm" action="/check_status" method="POST">
-        <input type="hidden" name="email" value="{{ email }}">
-        <input type="hidden" name="password" value="{{ password }}">
-        <button type="submit" class="btn btn-green">Şimdi Fişleri Kontrol Et (Sorgula)</button>
-      </form>
-    </div>
-    {% endif %}
-
-    <h3 style="margin-bottom:6px; font-size:15px;">Sistem Ekranı Görüntüsü:</h3>
+    <h3 style="margin-top:16px; margin-bottom:6px; font-size:15px; color:#1e3a8a;">Sistemden Alınan Ekran Görüntüsü:</h3>
     {% if screenshot %}
-      <img src="data:image/png;base64,{{ screenshot }}" class="screenshot" alt="Ekran Resmi">
+      <img src="data:image/jpeg;base64,{{ screenshot }}" class="screenshot" alt="Ekran Resmi">
     {% else %}
       <p style="color:#ef4444;">Görüntü alınamadı.</p>
     {% endif %}
 
-    <a href="/" class="btn btn-blue">Geri Dön</a>
+    <a href="/" class="btn btn-blue">Yeni İşlem Yap (Geri Dön)</a>
   </div>
-
-  {% if show_verify %}
-  <script>
-    let timeLeft = 90;
-    const countEl = document.getElementById('countdown');
-    const form = document.getElementById('checkForm');
-    
-    const interval = setInterval(() => {
-      timeLeft--;
-      if (timeLeft <= 0) {
-        clearInterval(interval);
-        countEl.innerText = "Sorgulanıyor...";
-        form.submit();
-      } else {
-        countEl.innerText = timeLeft + " saniye";
-      }
-    }, 1000);
-  </script>
-  {% endif %}
 </body>
 </html>
