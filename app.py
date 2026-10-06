@@ -1,5 +1,6 @@
 import base64
 import re
+import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, Response, redirect, url_for
 from playwright.sync_api import sync_playwright
@@ -71,7 +72,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             if "kimlik" in page.url.lower():
                 logs.append("[HATA] Giris basarisiz! Ogrenci numarasi veya OBS parolasi hatali.")
                 status = "error"
-                screenshot_bytes = page.screenshot()
+                screenshot_bytes = page.screenshot(type="jpeg", quality=75)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
                 return logs, screenshot_b64, status
 
@@ -82,7 +83,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             if page.get_by_text("Üzgünüz").is_visible() or page.get_by_text("kapalı").is_visible():
                 logs.append("[BILGI] Sistem su anda satis saatleri disindadir / Satis kapali.")
                 status = "warning"
-                screenshot_bytes = page.screenshot()
+                screenshot_bytes = page.screenshot(type="jpeg", quality=75)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
                 return logs, screenshot_b64, status
 
@@ -238,11 +239,49 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                     if (btn) btn.click();
                 }""")
 
-            logs.append("14. 'Devam Et' tiklandi! Banka onay bildirimi gonderildi.")
-            logs.append("15. Odeme sayfasi resmi hemen alindi. Lutfen telefonunuzdan onaylayiniz!")
+            logs.append("14. 'Devam Et' tiklandi! Bildirim telefonunuza gonderildi.")
+            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Tarayici oturumu canli tutuluyor)...")
 
-            page.wait_for_timeout(2500)
-            screenshot_bytes = page.screenshot()
+            # الحفاظ على الجلسة حية ومراقبة إتمام الدفع (لمدة تصل إلى 65 ثانية)
+            payment_completed = False
+            start_wait = time.time()
+            
+            while time.time() - start_wait < 65:
+                page.wait_for_timeout(2000)
+                current_url = page.url.lower()
+
+                # إذا عاد المتصفح إلى موقع الجامعة بعد الموافقة البنكية
+                if "isparta.edu.tr" in current_url and "vakifbank" not in current_url:
+                    logs.append("16. Tebrikler! Banka onayi basariyla alindi ve universite sistemine donuldu.")
+                    payment_completed = True
+                    page.wait_for_timeout(2500)
+                    break
+
+            if not payment_completed:
+                logs.append("[BILGI] Onay suresi icerisinde islem tamamlanamadi veya banka ekraninda kalindi.")
+
+            # الآن يتم فتح صفحة استعلام الفيشات بنفس جلسة تسجيل الدخول النشطة تماماً
+            logs.append("17. 'Fiş Alış Sorgulama' sayfasinda satin alinan yemekler teyit ediliyor...")
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(1500)
+
+            # النقر على زر Görüntüle
+            page.evaluate("""() => {
+                const btn = document.querySelector('#btnGoruntule');
+                if (btn) btn.click();
+                else if (typeof Goruntule === 'function') Goruntule();
+            }""")
+            
+            page.wait_for_timeout(3000)
+
+            # التمرير إلى جدول الفيشات المؤكدة
+            page.evaluate("""() => {
+                const tbl = document.querySelector('.panel-purple, #divHareketler, table');
+                if (tbl) tbl.scrollIntoView({ behavior: 'instant', block: 'center' });
+            }""")
+            page.wait_for_timeout(1000)
+
+            screenshot_bytes = page.screenshot(type="jpeg", quality=80)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
 
@@ -250,89 +289,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             logs.append(f"[HATA OLUSTU] {str(e)}")
             status = "error"
             try:
-                screenshot_bytes = page.screenshot()
-                screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-            except Exception:
-                pass
-        finally:
-            context.close()
-            browser.close()
-
-    return logs, screenshot_b64, status
-
-def query_fishes(email, password):
-    logs = ["Fiş sorgulama islemi baslatildi..."]
-    screenshot_b64 = None
-    status = "info"
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=True,
-            args=[
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-dev-shm-usage",
-                "--disable-gpu"
-            ]
-        )
-        context = browser.new_context(
-            viewport={"width": 1280, "height": 950},
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-        page = context.new_page()
-
-        try:
-            logs.append("1. Giris yapiliyor...")
-            page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=30000)
-            page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
-            page.get_by_placeholder("E-posta").wait_for(timeout=15000)
-            page.get_by_placeholder("E-posta").fill(email)
-            page.get_by_placeholder("Parola").fill(password)
-            page.get_by_role("button", name="Giriş").click()
-            
-            try:
-                page.wait_for_url(lambda u: "kimlik" not in u.lower(), timeout=12000)
-            except Exception:
-                page.wait_for_timeout(3000)
-
-            logs.append("2. 'Fiş Alış Sorgulama' sayfasina geciliyor...")
-            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
-            page.wait_for_timeout(2000)
-
-            logs.append("3. '#btnGoruntule' butonuna tiklaniyor ve Goruntule() cagriliyor...")
-            # استهداف مباشر للمعرف #btnGoruntule والدالة onclick="Goruntule()"
-            btn_clicked = False
-            try:
-                goruntule_btn = page.locator("#btnGoruntule")
-                if goruntule_btn.is_visible(timeout=5000):
-                    goruntule_btn.click(force=True)
-                    btn_clicked = True
-            except Exception:
-                pass
-
-            if not btn_clicked:
-                page.evaluate("""() => {
-                    const btn = document.querySelector('#btnGoruntule');
-                    if (btn) {
-                        btn.click();
-                    } else if (typeof Goruntule === 'function') {
-                        Goruntule();
-                    }
-                }""")
-
-            logs.append("4. Fiş hareketleri tablosu verileri bekleniyor...")
-            page.wait_for_timeout(4000)
-
-            logs.append("5. Fiş tablosu ekrani basariyla alindi.")
-            screenshot_bytes = page.screenshot(full_page=True)
-            screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
-            status = "success"
-
-        except Exception as e:
-            logs.append(f"[HATA] {str(e)}")
-            status = "error"
-            try:
-                screenshot_bytes = page.screenshot(full_page=True)
+                screenshot_bytes = page.screenshot(type="jpeg", quality=70)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             except Exception:
                 pass
@@ -403,34 +360,13 @@ def book():
     logs, screenshot, status = run_automation(
         email, password, card_name, card_number, exp_month, exp_year, cvv, seans, yemekhane, selected_days
     )
-    
-    show_verify = (status == "success")
 
     return render_template(
         "result.html",
         logs=logs,
         screenshot=screenshot,
         status=status,
-        selected_days=selected_days,
-        email=email,
-        password=password,
-        show_verify=show_verify
-    )
-
-@app.route("/check_status", methods=["POST"])
-def check_status():
-    email = request.form.get("email")
-    password = request.form.get("password")
-    if not email or not password:
-        return redirect(url_for("index"))
-        
-    logs, screenshot, status = query_fishes(email, password)
-    return render_template(
-        "result.html",
-        logs=logs,
-        screenshot=screenshot,
-        status=status,
-        show_verify=False
+        selected_days=selected_days
     )
 
 @app.errorhandler(404)
