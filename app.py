@@ -230,7 +230,6 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             logs.append("14. 'Devam Et' tiklandi! Banka onay bildirimi gonderildi.")
             logs.append("15. Odeme sayfasi resmi hemen alindi. Lutfen telefonunuzdan onaylayiniz!")
 
-            # لقطة فورية بدون تأخير
             page.wait_for_timeout(2500)
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
@@ -258,12 +257,21 @@ def query_fishes(email, password):
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
-            args=["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"]
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu"
+            ]
         )
-        context = browser.new_context(viewport={"width": 1280, "height": 950})
+        context = browser.new_context(
+            viewport={"width": 1280, "height": 950},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        )
         page = context.new_page()
 
         try:
+            logs.append("Giris yapiliyor...")
             page.goto("https://yemek.isparta.edu.tr/", wait_until="domcontentloaded", timeout=25000)
             page.get_by_role("link", name="Giriş Yapmak İçin Tıklayınız").click()
             page.get_by_placeholder("E-posta").wait_for(timeout=15000)
@@ -272,11 +280,21 @@ def query_fishes(email, password):
             page.get_by_role("button", name="Giriş").click()
             page.wait_for_timeout(2500)
 
-            logs.append("Fiş Alış Sorgulama sayfasina gidiliyor...")
-            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
-            page.wait_for_timeout(1500)
+            logs.append("Menuden 'Fiş Alış Sorgulama' sayfasina gidiliyor...")
+            # الانتقال عبر الرابط الصريح مع الانتظار السليم للشبكة
+            page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="networkidle", timeout=30000)
+            page.wait_for_timeout(2000)
 
-            logs.append("'Goruntule' butonuna tiklanarak kayitlar getiriliyor...")
+            # إذا لم يتم تحميل الصفحة، استخدام القائمة الجانبية كما في الصورة
+            if not page.locator("button:has-text('Görüntüle')").is_visible():
+                page.evaluate("""() => {
+                    const links = Array.from(document.querySelectorAll('a, span'));
+                    const target = links.find(l => l.innerText && l.innerText.includes('Fiş Alış Sorgulama'));
+                    if (target) target.click();
+                }""")
+                page.wait_for_timeout(2000)
+
+            logs.append("'Goruntule' butonuna tiklaniyor...")
             view_btn = page.locator("button:has-text('Görüntüle'), button:has-text('Goruntule'), .btn-primary:has-text('Görüntüle')").first
             if view_btn.is_visible():
                 view_btn.click(force=True)
@@ -287,8 +305,10 @@ def query_fishes(email, password):
                     if (b) b.click();
                 }""")
 
-            page.wait_for_timeout(2000)
-            logs.append("Guncel fis listesi tablosu alindi.")
+            # الانتظار حتى استقرار محتوى الجدول وظهور البيانات بالكامل
+            page.wait_for_timeout(3500)
+            logs.append("Fiş hareketleri tablosu basariyla goruntulendi.")
+
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
@@ -347,11 +367,12 @@ END:VCALENDAR"""
 
 @app.route("/book", methods=["GET", "POST"])
 def book():
-    # في حال الدخول بالخطأ عبر رابط مباشر أو تحديث صفحة النتيجة السابقة، يرجعه للرئيسية فوراً
-    if request.method == "GET" or not request.form.get("email"):
+    if request.method == "GET" or not request.form.get("student_id"):
         return redirect(url_for("index"))
 
-    email = request.form.get("email")
+    student_id = request.form.get("student_id", "").strip()
+    email = f"l{student_id}@isparta.edu.tr"
+    
     password = request.form.get("password")
     card_name = request.form.get("card_name")
     card_number = request.form.get("card_number")
