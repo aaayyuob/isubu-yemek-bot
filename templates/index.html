@@ -3,101 +3,72 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ISUBU Yemek Rezervasyon</title>
+  <title>İşlem Sonucu | ISUBÜ Yemek</title>
   <style>
-    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: #f4f6f9; margin: 0; padding: 15px; display: flex; justify-content: center; }
-    .card { background: white; padding: 25px; border-radius: 14px; width: 100%; max-width: 480px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
-    h2 { margin-top: 0; color: #1e3a8a; text-align: center; }
-    .calendar-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; background: #ecfdf5; border: 1.5px solid #10b981; color: #047857; border-radius: 8px; text-decoration: none; font-size: 13px; font-weight: bold; margin-bottom: 20px; text-align: center; }
-    .calendar-btn:hover { background: #d1fae5; }
-    h4 { margin: 18px 0 8px 0; color: #374151; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-    label { display: block; margin-top: 10px; font-weight: 600; font-size: 13px; color: #4b5563; }
-    input[type="text"], input[type="password"], select { width: 100%; padding: 11px; margin-top: 4px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; background: #fff; }
-    .row { display: flex; gap: 10px; }
-    .row > div { flex: 1; }
-    .days-grid { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 8px; }
-    .day-item { display: flex; align-items: center; background: #f9fafb; padding: 10px; border-radius: 6px; border: 1px solid #e5e7eb; font-size: 13px; }
-    .day-item input { margin-right: 10px; transform: scale(1.1); }
-    button { width: 100%; padding: 14px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; margin-top: 20px; cursor: pointer; }
-    button:hover { background: #1d4ed8; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; margin: 0; padding: 20px; }
+    .card { max-width: 600px; margin: 0 auto; background: white; border-radius: 16px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h2 { margin-top: 0; color: #166534; font-size: 20px; }
+    .log-box { background: #111827; color: #10b981; padding: 14px; border-radius: 10px; font-family: monospace; font-size: 13px; margin: 16px 0; max-height: 180px; overflow-y: auto; line-height: 1.6; }
+    .screenshot { width: 100%; border: 1px solid #e5e7eb; border-radius: 10px; margin-top: 10px; }
+    .timer-card { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 16px; margin: 20px 0; text-align: center; }
+    .timer-card h3 { margin: 0 0 8px 0; color: #1e40af; font-size: 16px; }
+    .timer-val { font-size: 24px; font-weight: bold; color: #1d4ed8; }
+    .btn { display: block; width: 100%; padding: 14px; border-radius: 10px; font-size: 16px; font-weight: 600; text-align: center; text-decoration: none; cursor: pointer; border: none; box-sizing: border-box; }
+    .btn-green { background: #16a34a; color: white; margin-top: 10px; }
+    .btn-blue { background: #2563eb; color: white; margin-top: 15px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <h2>ISUBÜ Yemek Rezervasyonu</h2>
+    <h2>İşlem Durumu Raporu</h2>
     
-    <a href="/reminder.ics" class="calendar-btn">
-      📅 Pazartesi & Cuma 12:30 Hatırlatıcısını Takvime Ekle
-    </a>
+    <div class="log-box">
+      {% for log in logs %}
+        <div>{{ log }}</div>
+      {% endfor %}
+    </div>
 
-    <form action="/book" method="POST">
-      <h4>Kullanici Giris Bilgileri</h4>
-      <label>E-posta</label>
-      <input type="text" name="email" placeholder="ornek@isparta.edu.tr" required>
-      <label>Sifre (Parola)</label>
-      <input type="password" name="password" required>
+    {% if show_verify %}
+    <div class="timer-card">
+      <h3>Banka Onayı Bekleniyor</h3>
+      <p style="margin:0 0 10px 0; font-size:13px; color:#4b5563;">VakıfBank uygulamanızdan işlemi onaylayınız. Sistem otomatik olarak fişlerinizi sorgulayacaktır:</p>
+      <div class="timer-val" id="countdown">90 saniye</div>
+      
+      <form id="checkForm" action="/check_status" method="POST">
+        <input type="hidden" name="email" value="{{ email }}">
+        <input type="hidden" name="password" value="{{ password }}">
+        <button type="submit" class="btn btn-green">Şimdi Fişleri Kontrol Et (Sorgula)</button>
+      </form>
+    </div>
+    {% endif %}
 
-      <h4>Yemekhane ve Seans</h4>
-      <label>Yemekhane Secimi</label>
-      <select name="yemekhane" required>
-        <option value="100.Yıl Yerleşkesi" selected>100.Yıl Yerleşkesi</option>
-        <option value="Aksu MYO">Aksu MYO</option>
-        <option value="Atabey MYO">Atabey MYO</option>
-        <option value="Çiftçi Eğitim Merkezi">Çiftçi Eğitim Merkezi</option>
-        <option value="Eğirdir MYO">Eğirdir MYO</option>
-        <option value="Gelendost MYO">Gelendost MYO</option>
-        <option value="Gönen MYO">Gönen MYO</option>
-        <option value="Keçiborlu MYO">Keçiborlu MYO</option>
-        <option value="OSB MYO">OSB MYO</option>
-        <option value="REKTÖRLÜK YEMEKHANESİ">REKTÖRLÜK YEMEKHANESİ</option>
-        <option value="Senirkent MYO">Senirkent MYO</option>
-        <option value="Sütçüler Prof.Dr. Hasan Gürbüz MYO">Sütçüler Prof.Dr. Hasan Gürbüz MYO</option>
-        <option value="Şarkikaraağaç Turizm MYO">Şarkikaraağaç Turizm MYO</option>
-        <option value="Teknik Bilimler MYO">Teknik Bilimler MYO</option>
-        <option value="Turizm Fakültesi">Turizm Fakültesi</option>
-        <option value="Uluborlu Selahattin Karasoy MYO">Uluborlu Selahattin Karasoy MYO</option>
-        <option value="Yalvaç Teknik Bilimler MYO">Yalvaç Teknik Bilimler MYO</option>
-        <option value="Yenişarbademli MYO">Yenişarbademli MYO</option>
-      </select>
+    <h3 style="margin-bottom:6px;">Sistem Ekranı Görüntüsü:</h3>
+    {% if screenshot %}
+      <img src="data:image/png;base64,{{ screenshot }}" class="screenshot" alt="Ekran Resmi">
+    {% else %}
+      <p style="color:#ef4444;">Görüntü alınamadı.</p>
+    {% endif %}
 
-      <label>Seans Secimi</label>
-      <select name="seans">
-        <option value="Ogle">Ogle Yemegi</option>
-        <option value="Aksam">Aksam Yemegi</option>
-      </select>
-
-      <h4>Yemek Alinacak Gunler</h4>
-      <div class="days-grid">
-        <label class="day-item"><input type="checkbox" name="days" value="Pazartesi" checked> Pazartesi ({{ dates['Pazartesi'] }})</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Sali" checked> Sali ({{ dates['Sali'] }})</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Carsamba" checked> Carsamba ({{ dates['Carsamba'] }})</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Persembe" checked> Persembe ({{ dates['Persembe'] }})</label>
-        <label class="day-item"><input type="checkbox" name="days" value="Cuma" checked> Cuma ({{ dates['Cuma'] }})</label>
-      </div>
-
-      <h4>Kart Bilgileri</h4>
-      <label>Kart Uzerindeki Isim</label>
-      <input type="text" name="card_name" placeholder="Ad Soyad" required>
-      <label>Kart Numarasi</label>
-      <input type="text" name="card_number" maxlength="16" placeholder="16 haneli kart numarasi" required>
-      <div class="row">
-        <div>
-          <label>Ay</label>
-          <input type="text" name="exp_month" placeholder="01" maxlength="2" required>
-        </div>
-        <div>
-          <label>Yil</label>
-          <input type="text" name="exp_year" placeholder="2026" maxlength="4" required>
-        </div>
-        <div>
-          <label>CVV</label>
-          <input type="password" name="cvv" placeholder="123" maxlength="3" required>
-        </div>
-      </div>
-
-      <button type="submit">Sisteme Baglan ve Satin Al</button>
-    </form>
+    <a href="/" class="btn btn-blue">Geri Dön</a>
   </div>
+
+  {% if show_verify %}
+  <script>
+    let timeLeft = 90;
+    const countEl = document.getElementById('countdown');
+    const form = document.getElementById('checkForm');
+    
+    const interval = setInterval(() => {
+      timeLeft--;
+      if (timeLeft <= 0) {
+        clearInterval(interval);
+        countEl.innerText = "Sorgulanıyor...";
+        form.submit();
+      } else {
+        countEl.innerText = timeLeft + " saniye";
+      }
+    }, 1000);
+  </script>
+  {% endif %}
 </body>
 </html>
