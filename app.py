@@ -65,7 +65,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             if "kimlik" in page.url.lower():
                 logs.append("[HATA] Giris basarisiz! Ogrenci numarasi veya OBS parolasi hatali.")
                 status = "error"
-                screenshot_bytes = page.screenshot()
+                screenshot_bytes = page.screenshot(full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
                 return logs, screenshot_b64, status
 
@@ -76,7 +76,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             if page.get_by_text("Üzgünüz").is_visible() or page.get_by_text("kapalı").is_visible():
                 logs.append("[BILGI] Sistem su anda satis saatleri disindadir / Satis kapali.")
                 status = "warning"
-                screenshot_bytes = page.screenshot()
+                screenshot_bytes = page.screenshot(full_page=True)
                 screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
                 return logs, screenshot_b64, status
 
@@ -233,78 +233,50 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 }""")
 
             logs.append("14. 'Devam Et' tiklandi! Bildirim telefonunuza gonderildi.")
-            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Banka onayi bekleniyor)...")
+            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Bir kez tiklandi, bekleniyor)...")
 
-            confirmed = False
+            # الانتظار الذكي مرة واحدة فقط دون تكرار النقر لمنع تكرار الخصم
             start_t = time.time()
-            
             while time.time() - start_t < 50:
-                page.wait_for_timeout(1500)
+                page.wait_for_timeout(2000)
+                current_url = page.url.lower()
+                
+                if "isparta.edu.tr" in current_url and "vakifbank" not in current_url and "seans" not in current_url:
+                    logs.append("16. Banka onayi alindi ve universiteye donuldu.")
+                    break
                 
                 try:
                     content = page.content().lower()
-                except Exception:
-                    content = ""
-
-                if "isparta.edu.tr" in page.url.lower() and "vakifbank" not in page.url.lower() and "seans" not in page.url.lower():
-                    logs.append("16. Banka islemi onaylandi ve universite sistemine donuldu!")
-                    confirmed = True
-                    break
-
-                if "başarılı" in content or "tamamlandı" in content or "tahsil" in content:
-                    logs.append("16. Odeme islemi basarili olarak teyit edildi!")
-                    confirmed = True
-                    break
-
-                try:
-                    target_scope.evaluate("""() => {
-                        const finishBtn = Array.from(document.querySelectorAll('button, input, a')).find(el => (el.innerText || el.value || '').includes('Tamam') || (el.innerText || el.value || '').includes('Kapat') || (el.innerText || el.value || '').includes('Devam'));
-                        if (finishBtn) finishBtn.click();
-                    }""")
+                    if "başarılı" in content or "tamamlandı" in content:
+                        logs.append("16. Odeme islemi basariyla tamamlandi.")
+                        break
                 except Exception:
                     pass
 
-            # 17. الانتقال مباشرة إلى صفحة Fiş Alış Sorgulama
+            # 17. الذهاب لصفحة الفيشات
             logs.append("17. 'Fiş Alış Sorgulama' sayfasina geciliyor...")
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
             page.wait_for_timeout(2000)
 
-            # 18. النقر الصريح على الزر الحقيقي #btnGoruntule
-            logs.append("18. '#btnGoruntule' butonuna tiklanarak fiş tablosu sorgulaniyor...")
+            # 18. الضغط على زر #btnGoruntule مرة واحدة لجلب البيانات
+            logs.append("18. '#btnGoruntule' butonuna basilarak sonuclar getiriliyor...")
             page.evaluate("""() => {
                 const btn = document.querySelector('#btnGoruntule');
-                if (btn) {
-                    btn.click();
-                } else if (typeof Goruntule === 'function') {
-                    Goruntule();
-                }
+                if (btn) btn.click();
+                else if (typeof Goruntule === 'function') Goruntule();
             }""")
 
-            # الانتظار الكافي لجلب استجابة الـ AJAX الخاصة بالجدول
-            page.wait_for_timeout(4000)
-
-            # 19. التمرير الدقيق لجدول الفيشات والتقاطه مباشرة
-            logs.append("19. Onaylanan fiş tablosunun ekran resmi aliniyor...")
-            
-            # التمرير إلى منتصف لوحة الفيشات
-            page.evaluate("""() => {
-                const tbl = document.querySelector('.panel-purple, #divHareketler, table');
-                if (tbl) {
-                    tbl.scrollIntoView({ behavior: 'instant', block: 'center' });
-                }
-            }""")
-            page.wait_for_timeout(1000)
-
-            # محاولة التقاط الحاوية المحددة للجدول، وإذا تعذر ذلك يتم التقاط الشاشة كاملة
+            # الانتظار حتى تظهر صفوف الجدول الحقيقية ولا تظل فارغة
+            logs.append("19. Tablo verilerinin yuklenmesi bekleniyor...")
             try:
-                table_loc = page.locator(".panel-purple, #divHareketler").first
-                if table_loc.is_visible():
-                    screenshot_bytes = table_loc.screenshot()
-                else:
-                    screenshot_bytes = page.screenshot(full_page=True)
+                page.wait_for_selector("#divHareketler table tr, .panel-purple table tr, table tr", timeout=8000)
             except Exception:
-                screenshot_bytes = page.screenshot(full_page=True)
+                page.wait_for_timeout(3000)
 
+            logs.append("20. Fiş tablosu ekran resmi basariyla alindi.")
+            
+            # التقاط الشاشة كاملة لتشمل الجدول بالأسفل بوضوح تام
+            screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
 
@@ -365,7 +337,6 @@ def book():
     if request.method == "GET":
         return redirect(url_for("index"))
 
-    # استلام البادئة المختارة (l أو yl أو d) مع أرقام الطالب
     prefix = request.form.get("prefix", "l").strip().lower()
     raw_digits = re.sub(r"\D", "", request.form.get("student_id", "").strip())
     
