@@ -60,7 +60,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             try:
                 page.wait_for_url(lambda u: "kimlik" not in u.lower(), timeout=12000)
             except Exception:
-                page.wait_for_timeout(2500)
+                page.wait_for_timeout(2000)
 
             if "kimlik" in page.url.lower():
                 logs.append("[HATA] Giris basarisiz! Ogrenci numarasi veya OBS parolasi hatali.")
@@ -203,7 +203,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 page.wait_for_url(lambda u: "vakifbank" in u.lower() or "3d" in u.lower() or "pos" in u.lower(), timeout=18000)
                 logs.append("12. VakifBank sayfasina basariyla giris yapildi.")
             except Exception:
-                page.wait_for_timeout(3500)
+                page.wait_for_timeout(2500)
 
             target_scope = page
             for frame in page.frames:
@@ -233,49 +233,27 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 }""")
 
             logs.append("14. 'Devam Et' tiklandi! Bildirim telefonunuza gonderildi.")
-            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Bir kez tiklandi, bekleniyor)...")
+            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz...")
 
-            # الانتظار الذكي مرة واحدة فقط دون تكرار النقر لمنع تكرار الخصم
-            start_t = time.time()
-            while time.time() - start_t < 50:
-                page.wait_for_timeout(2000)
-                current_url = page.url.lower()
-                
-                if "isparta.edu.tr" in current_url and "vakifbank" not in current_url and "seans" not in current_url:
-                    logs.append("16. Banka onayi alindi ve universiteye donuldu.")
-                    break
-                
-                try:
-                    content = page.content().lower()
-                    if "başarılı" in content or "tamamlandı" in content:
-                        logs.append("16. Odeme islemi basariyla tamamlandi.")
-                        break
-                except Exception:
-                    pass
+            # الانتظار الآمن المبسط لتجنب شاشة Render البيضاء
+            time.sleep(12)
 
-            # 17. الذهاب لصفحة الفيشات
-            logs.append("17. 'Fiş Alış Sorgulama' sayfasina geciliyor...")
+            logs.append("16. Banka onayi sonrasi islemler tamamlaniyor...")
+
+            # 17. الذهاب مباشرة لصفحة استعلام الفيشات
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
             page.wait_for_timeout(2000)
 
-            # 18. الضغط على زر #btnGoruntule مرة واحدة لجلب البيانات
-            logs.append("18. '#btnGoruntule' butonuna basilarak sonuclar getiriliyor...")
+            # 18. الضغط على زر Görüntüle
             page.evaluate("""() => {
                 const btn = document.querySelector('#btnGoruntule');
                 if (btn) btn.click();
                 else if (typeof Goruntule === 'function') Goruntule();
             }""")
 
-            # الانتظار حتى تظهر صفوف الجدول الحقيقية ولا تظل فارغة
-            logs.append("19. Tablo verilerinin yuklenmesi bekleniyor...")
-            try:
-                page.wait_for_selector("#divHareketler table tr, .panel-purple table tr, table tr", timeout=8000)
-            except Exception:
-                page.wait_for_timeout(3000)
+            page.wait_for_timeout(3500)
 
-            logs.append("20. Fiş tablosu ekran resmi basariyla alindi.")
-            
-            # التقاط الشاشة كاملة لتشمل الجدول بالأسفل بوضوح تام
+            logs.append("17. Fiş tablosu başarıyla alındı.")
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
@@ -289,8 +267,11 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             except Exception:
                 pass
         finally:
-            context.close()
-            browser.close()
+            try:
+                context.close()
+                browser.close()
+            except Exception:
+                pass
 
     return logs, screenshot_b64, status
 
