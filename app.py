@@ -60,7 +60,7 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
             try:
                 page.wait_for_url(lambda u: "kimlik" not in u.lower(), timeout=12000)
             except Exception:
-                page.wait_for_timeout(2000)
+                page.wait_for_timeout(2500)
 
             if "kimlik" in page.url.lower():
                 logs.append("[HATA] Giris basarisiz! Ogrenci numarasi veya OBS parolasi hatali.")
@@ -233,27 +233,46 @@ def run_automation(email, password, card_name, card_number, exp_month, exp_year,
                 }""")
 
             logs.append("14. 'Devam Et' tiklandi! Bildirim telefonunuza gonderildi.")
-            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz...")
+            logs.append("15. Lutfen simdi telefonunuzdan Cep Imza onayini veriniz (Banka onayi bekleniyor)...")
 
-            # الانتظار الآمن المبسط لتجنب شاشة Render البيضاء
-            time.sleep(12)
+            # مراقبة ذكية حية حتى تعود الصفحة للجامعة بعد موافقتك في الهاتف
+            start_t = time.time()
+            bank_approved = False
+            
+            while time.time() - start_t < 45:
+                page.wait_for_timeout(1500)
+                current_url = page.url.lower()
+                
+                # التحقق هل تم العودة إلى موقع الجامعة بنجاح وتم خصم المبلغ
+                if "isparta.edu.tr" in current_url and "vakifbank" not in current_url and "seans" not in current_url:
+                    logs.append("16. Banka onayi alindi ve odeme basariyla tamamlandi!")
+                    bank_approved = True
+                    break
+                
+                try:
+                    content = page.content().lower()
+                    if "başarılı" in content or "tamamlandı" in content or "tahsil" in content:
+                        logs.append("16. Odeme islemi basariyla teyit edildi!")
+                        bank_approved = True
+                        break
+                except Exception:
+                    pass
 
-            logs.append("16. Banka onayi sonrasi islemler tamamlaniyor...")
-
-            # 17. الذهاب مباشرة لصفحة استعلام الفيشات
+            # 17. الذهاب لصفحة الفيشات لعرض تأكيد الحجز والجدول
+            logs.append("17. 'Fiş Alış Sorgulama' sayfasina geciliyor...")
             page.goto("https://yemek.isparta.edu.tr/Yemekhane/FisAlisSorgulama", wait_until="domcontentloaded", timeout=25000)
             page.wait_for_timeout(2000)
 
-            # 18. الضغط على زر Görüntüle
+            logs.append("18. '#btnGoruntule' butonuna basilarak sonuclar getiriliyor...")
             page.evaluate("""() => {
                 const btn = document.querySelector('#btnGoruntule');
                 if (btn) btn.click();
                 else if (typeof Goruntule === 'function') Goruntule();
             }""")
 
-            page.wait_for_timeout(3500)
+            page.wait_for_timeout(4000)
 
-            logs.append("17. Fiş tablosu başarıyla alındı.")
+            logs.append("19. Onaylanan fiş tablosu ekrani alindi.")
             screenshot_bytes = page.screenshot(full_page=True)
             screenshot_b64 = base64.b64encode(screenshot_bytes).decode("utf-8")
             status = "success"
@@ -304,7 +323,7 @@ DESCRIPTION:ISUBÜ Yemek Rezervasyon Zamanı (12:30)
 END:VALARM
 END:VEVENT
 END:VCALENDAR"""
-    return Response(
+    Response(
         ics_content,
         mimetype="text/calendar",
         headers={
